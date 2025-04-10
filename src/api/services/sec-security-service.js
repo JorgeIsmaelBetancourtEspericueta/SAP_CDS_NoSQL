@@ -580,12 +580,10 @@ async function CreateUser(req) {
       COUNTRY,
       ROLES,
       reguser,
-    } = req?.req?.body?.users; // Accediendo a la clave "users"
+    } = req?.req?.body?.users;
 
-    // Obtener la fecha y hora actual
     const currentDate = new Date();
 
-    // Crear el objeto de DETAIL_ROW_REG con el registro actual
     const detailRowReg = [
       {
         CURRENT: false,
@@ -600,6 +598,26 @@ async function CreateUser(req) {
         REGUSER: reguser,
       },
     ];
+
+    // ✅ Verificación de existencia de roles en la colección ZTROLES
+    const roleIds = ROLES?.map(role => role.ROLEID) || [];
+
+    const existingRoles = await mongoose.connection
+      .collection("ZTROLES")
+      .find({ ROLEID: { $in: roleIds } })
+      .project({ ROLEID: 1 }) // Solo obtenemos el campo ROLEID
+      .toArray();
+
+    const existingRoleIds = existingRoles.map(role => role.ROLEID);
+
+    const missingRoles = roleIds.filter(roleId => !existingRoleIds.includes(roleId));
+
+    if (missingRoles.length > 0) {
+      return {
+        message: "Algunos roles no existen en ZTROLES",
+        missingRoles,
+      };
+    }
 
     // Crear el nuevo objeto de usuario
     const newUser = {
@@ -625,11 +643,10 @@ async function CreateUser(req) {
       REGION: REGION || "",
       STATE: STATE || "",
       COUNTRY: COUNTRY || "",
-      DETAIL_ROW_REG: detailRowReg, // Agregar el detalle de registro
-      ROLES: ROLES || [], // Roles asignados al usuario
+      DETAIL_ROW_REG: detailRowReg,
+      ROLES: ROLES || [],
     };
 
-    // Insertar el nuevo usuario en la colección
     const result = await mongoose.connection
       .collection("ZTUSERS")
       .insertOne(newUser);
@@ -644,127 +661,6 @@ async function CreateUser(req) {
   }
 }
 
-// Servicio para borrado lógico de un usuario
-async function DeleteUserLogic(req) {
-  try {
-    const userid = req?.req?.query?.userid;
-
-    if (!userid) {
-      throw new Error("Falta el parámetro requerido: 'userid'");
-    }
-
-    const currentDate = new Date();
-    const newDetailReg = {
-      CURRENT: true,
-      REGDATE: currentDate,
-      REGTIME: currentDate,
-    };
-
-    const collection = mongoose.connection.collection("ZTUSERS");
-
-    // Paso 1: Desactivar el campo CURRENT en registros anteriores
-    await collection.updateOne(
-      { USERID: userid },
-      {
-        $set: {
-          "DETAIL_ROW.DETAIL_ROW_REG.$[elem].CURRENT": false,
-          "DETAIL_ROW.ACTIVED": false,
-        },
-      },
-      {
-        arrayFilters: [{ "elem.CURRENT": true }],
-      }
-    );
-
-    // Paso 2: Agregar nuevo registro
-    const result = await collection.updateOne(
-      { USERID: userid },
-      {
-        $push: {
-          "DETAIL_ROW.DETAIL_ROW_REG": {
-            $each: [newDetailReg],
-            $position: 0,
-          },
-        },
-      }
-    );
-
-    if (result.matchedCount === 0) {
-      throw new Error("Usuario no encontrado");
-    }
-
-    return {
-      message: "Usuario desactivado (borrado lógico) exitosamente",
-      matched: result.matchedCount,
-      modified: result.modifiedCount,
-    };
-  } catch (error) {
-    console.error("Error en el borrado lógico del usuario:", error.message);
-    throw error;
-  }
-}
-
-// Servicio para borrado físico de un usuario
-async function PhysicalDeleteUser(req) {
-  try {
-    const userid = req?.req?.query?.userid;
-
-    if (!userid) {
-      throw new Error("Falta el parámetro requerido: 'userid'");
-    }
-
-    const currentDate = new Date();
-
-    // Crear el nuevo registro para DETAIL_ROW_REG (opcional si deseas mantener un historial)
-    const newDetailReg = {
-      CURRENT: true,
-      REGDATE: currentDate,
-      REGTIME: currentDate,
-    };
-
-    const collection = mongoose.connection.collection("ZTUSERS");
-
-    // Paso 1: Desactivar el campo CURRENT en registros anteriores
-    await collection.updateOne(
-      { USERID: userid },
-      {
-        $set: {
-          "DETAIL_ROW.DETAIL_ROW_REG.$[elem].CURRENT": false, // Cambiar CURRENT a false en registros previos
-          "DETAIL_ROW.DELETED": true, // Modificar el campo DELETED a true
-        },
-      },
-      {
-        arrayFilters: [{ "elem.CURRENT": true }], // Filtrar los registros que estén marcados como CURRENT
-      }
-    );
-
-    // Paso 2: Agregar el nuevo registro a DETAIL_ROW_REG (opcional)
-    const result = await collection.updateOne(
-      { USERID: userid },
-      {
-        $push: {
-          "DETAIL_ROW.DETAIL_ROW_REG": {
-            $each: [newDetailReg],
-            $position: 0, // Insertar al inicio del arreglo
-          },
-        },
-      }
-    );
-
-    if (result.matchedCount === 0) {
-      throw new Error("Usuario no encontrado");
-    }
-
-    return {
-      message: "Usuario marcado como eliminado (borrado físico) exitosamente",
-      matched: result.matchedCount,
-      modified: result.modifiedCount,
-    };
-  } catch (error) {
-    console.error("Error en el borrado físico del usuario:", error.message);
-    throw error;
-  }
-}
 
 // Servicio para eliminar un registro de la colección correspondiente (por query params)
 
