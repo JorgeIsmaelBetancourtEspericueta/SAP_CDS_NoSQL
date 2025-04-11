@@ -841,7 +841,7 @@ async function UpdateValue(req) {
       throw new Error("El parámetro VALUEID es obligatorio para realizar la actualización.");
     }
 
-    // Desestructuración de las propiedades del body (solo las que se proporcionen)
+    // Desestructuración de las propiedades del body
     const {
       LABELID,
       VALUEPAID,
@@ -859,24 +859,36 @@ async function UpdateValue(req) {
 
     const currentDate = new Date();
 
-    // Validaciones (similar a CreateValue)
-    const validLabels = ["IdApplications", "IdView", "IdProcesses", "IdPrivileges", "IdRoles"];
+    // Consultar el registro actual basado en VALUEID
+    const existingRecord = await mongoose.connection
+      .collection("ZTVALUES")
+      .findOne({ VALUEID: valueid });
 
-    if (LABELID && !validLabels.includes(LABELID)) {
+    if (!existingRecord) {
+      throw new Error(`No se encontró un registro con el VALUEID: ${valueid}`);
+    }
+
+    // Obtener LABELID actual del registro si no se proporciona en el body
+    const currentLabelId = LABELID || existingRecord.LABELID;
+
+    // Validaciones (similar a CreateValue)
+    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdPrivileges", "IdRoles"];
+
+    if (!validLabels.includes(currentLabelId)) {
       throw new Error(`LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`);
     }
 
-    if (LABELID === "IdApplications" && VALUEPAID) {
+    if (currentLabelId === "IdApplications" && VALUEPAID) {
       throw new Error("VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre.");
     }
 
-    if (LABELID && LABELID !== "IdApplications" && VALUEPAID) {
-      const labelIndex = validLabels.indexOf(LABELID);
+    if (currentLabelId !== "IdApplications" && VALUEPAID) {
+      const labelIndex = validLabels.indexOf(currentLabelId);
       const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
 
       if (!VALUEPAID.startsWith(`${parentLabel} -`)) {
         throw new Error(
-          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${LABELID} es hijo de ${parentLabel}.`
+          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${currentLabelId} es hijo de ${parentLabel}.`
         );
       }
 
