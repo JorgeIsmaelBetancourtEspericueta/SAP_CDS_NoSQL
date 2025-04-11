@@ -730,6 +730,7 @@ async function CreateValue(req) {
       COMPANYID,
       CEDIID,
       LABELID,
+      VALUEPAID,
       VALUEID,
       VALUE,
       ALIAS,
@@ -742,7 +743,6 @@ async function CreateValue(req) {
       DELETED = false,
       reguser,
     } = req?.req?.body?.values;
-
 
     console.log(COMPANYID);
 
@@ -769,6 +769,7 @@ async function CreateValue(req) {
       COMPANYID: COMPANYID,
       CEDIID: CEDIID,
       LABELID: LABELID || "",
+      VALUEPAID: VALUEPAID || "",
       VALUEID: VALUEID || "",
       VALUE: VALUE || "",
       ALIAS: ALIAS || "",
