@@ -600,7 +600,7 @@ async function CreateUser(req) {
     ];
 
     // ✅ Verificación de existencia de roles en la colección ZTROLES
-    const roleIds = ROLES?.map(role => role.ROLEID) || [];
+    const roleIds = ROLES?.map((role) => role.ROLEID) || [];
 
     const existingRoles = await mongoose.connection
       .collection("ZTROLES")
@@ -608,9 +608,11 @@ async function CreateUser(req) {
       .project({ ROLEID: 1 }) // Solo obtenemos el campo ROLEID
       .toArray();
 
-    const existingRoleIds = existingRoles.map(role => role.ROLEID);
+    const existingRoleIds = existingRoles.map((role) => role.ROLEID);
 
-    const missingRoles = roleIds.filter(roleId => !existingRoleIds.includes(roleId));
+    const missingRoles = roleIds.filter(
+      (roleId) => !existingRoleIds.includes(roleId)
+    );
 
     if (missingRoles.length > 0) {
       return {
@@ -660,7 +662,6 @@ async function CreateUser(req) {
     throw error;
   }
 }
-
 
 // Servicio para eliminar un registro de la colección correspondiente (por query params)
 
@@ -721,10 +722,10 @@ async function DeleteRecord(req) {
   }
 }
 
-
 // Servicio para crear un nuevo ZTVALUES
 async function CreateValue(req) {
   try {
+    //Desectructuración para una aplicacion
     const {
       COMPANYID,
       CEDIID,
@@ -740,7 +741,10 @@ async function CreateValue(req) {
       ACTIVED = true,
       DELETED = false,
       reguser,
-    } = req?.req?.body?.ztvalue;
+    } = req?.req?.body?.values;
+
+
+    console.log(COMPANYID);
 
     const currentDate = new Date();
 
@@ -762,8 +766,8 @@ async function CreateValue(req) {
 
     // Crear el nuevo objeto ZTVALUES
     const newZTValue = {
-      COMPANYID: COMPANYID || null,
-      CEDIID: CEDIID || null,
+      COMPANYID: COMPANYID,
+      CEDIID: CEDIID,
       LABELID: LABELID || "",
       VALUEID: VALUEID || "",
       VALUE: VALUE || "",
@@ -776,8 +780,8 @@ async function CreateValue(req) {
       DETAIL_ROW: {
         ACTIVED,
         DELETED,
+        DETAIL_ROW_REG: detailRowReg,
       },
-      DETAIL_ROW_REG: detailRowReg,
     };
 
     // Inserción del nuevo documento
@@ -800,5 +804,5 @@ module.exports = {
   GetUserInfo,
   CreateUser,
   DeleteRecord,
-  CreateValue
+  CreateValue,
 };
