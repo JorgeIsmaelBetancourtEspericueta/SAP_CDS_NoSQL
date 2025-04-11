@@ -763,8 +763,8 @@ async function CreateValue(req) {
     ];
 
     // Validaciones
-    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdPrivileges", "IdRoles"];
-    
+    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdRoles", "IdPrivileges"];
+
     if (!validLabels.includes(LABELID)) {
       throw new Error(`LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`);
     }
@@ -778,9 +778,11 @@ async function CreateValue(req) {
       const labelIndex = validLabels.indexOf(LABELID);
       const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
 
-      if (!VALUEPAID || !VALUEPAID.startsWith(`${parentLabel}-`)) {
+      // Validar el formato de VALUEPAID (sin espacios alrededor del guion)
+      const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
+      if (!regex.test(VALUEPAID)) {
         throw new Error(
-          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${LABELID} es hijo de ${parentLabel}.`
+          `VALUEPAID debe seguir el formato "${parentLabel}-<IdRegistro>" sin espacios alrededor del guion.`
         );
       }
 
@@ -872,7 +874,7 @@ async function UpdateValue(req) {
     const currentLabelId = LABELID || existingRecord.LABELID;
 
     // Validaciones (similar a CreateValue)
-    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdPrivileges", "IdRoles"];
+    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdRoles", "IdPrivileges"];
 
     if (!validLabels.includes(currentLabelId)) {
       throw new Error(`LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`);
@@ -886,9 +888,11 @@ async function UpdateValue(req) {
       const labelIndex = validLabels.indexOf(currentLabelId);
       const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
 
-      if (!VALUEPAID.startsWith(`${parentLabel}-`)) {
+      // Verificar el formato de VALUEPAID (sin espacios alrededor del guion)
+      const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
+      if (!regex.test(VALUEPAID)) {
         throw new Error(
-          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${currentLabelId} es hijo de ${parentLabel}.`
+          `VALUEPAID debe estar en el formato "${parentLabel}-<IdRegistro>" sin espacios alrededor del guion.`
         );
       }
 
