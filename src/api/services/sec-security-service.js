@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// Servicio para hacer el lookup entre ZTLABELS y ZTVALUES
+// Servicio para hacer el lookup entre ZTLABELS y SS
 async function GetLabelsWithValues(req) {
   try {
     const labelid = req?.req?.query?.labelid;
@@ -15,7 +15,7 @@ async function GetLabelsWithValues(req) {
         .aggregate([
           {
             $lookup: {
-              from: "ZTVALUES",
+              from: "SS",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
@@ -33,7 +33,7 @@ async function GetLabelsWithValues(req) {
           },
           {
             $lookup: {
-              from: "ZTVALUES",
+              from: "SS",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
@@ -51,7 +51,7 @@ async function GetLabelsWithValues(req) {
           },
           {
             $lookup: {
-              from: "ZTVALUES",
+              from: "SS",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
@@ -118,7 +118,7 @@ async function GetUserInfo(req) {
           { $unwind: "$ROLE_DETAIL.PRIVILEGES" },
           {
             $lookup: {
-              from: "ZTVALUES",
+              from: "SS",
               let: { processId: "$ROLE_DETAIL.PRIVILEGES.PROCESSID" },
               pipeline: [
                 {
@@ -138,7 +138,7 @@ async function GetUserInfo(req) {
                 },
                 {
                   $lookup: {
-                    from: "ZTVALUES",
+                    from: "SS",
                     let: { viewId: "$VALUEPAID" },
                     pipeline: [
                       {
@@ -158,7 +158,7 @@ async function GetUserInfo(req) {
                       },
                       {
                         $lookup: {
-                          from: "ZTVALUES",
+                          from: "SS",
                           let: { appId: "$VALUEPAID" },
                           pipeline: [
                             {
@@ -347,7 +347,7 @@ async function GetUserInfo(req) {
           { $unwind: "$ROLE_DETAIL.PRIVILEGES" },
           {
             $lookup: {
-              from: "ZTVALUES",
+              from: "SS",
               let: { processId: "$ROLE_DETAIL.PRIVILEGES.PROCESSID" },
               pipeline: [
                 {
@@ -367,7 +367,7 @@ async function GetUserInfo(req) {
                 },
                 {
                   $lookup: {
-                    from: "ZTVALUES",
+                    from: "SS",
                     let: { viewId: "$VALUEPAID" },
                     pipeline: [
                       {
@@ -387,7 +387,7 @@ async function GetUserInfo(req) {
                       },
                       {
                         $lookup: {
-                          from: "ZTVALUES",
+                          from: "SS",
                           let: { appId: "$VALUEPAID" },
                           pipeline: [
                             {
@@ -714,7 +714,7 @@ async function DeleteRecord(req) {
     if (userid) return await deleteFromCollection("ZTUSERS", "USERID", userid);
     if (roleid) return await deleteFromCollection("ZTROLES", "ROLEID", roleid);
     if (valueid)
-      return await deleteFromCollection("ZTVALUE", "VALUEID", valueid);
+      return await deleteFromCollection("ZTVALUES", "VALUEID", valueid);
   } catch (error) {
     console.error("Error al eliminar el registro:", error.message);
     throw error;
