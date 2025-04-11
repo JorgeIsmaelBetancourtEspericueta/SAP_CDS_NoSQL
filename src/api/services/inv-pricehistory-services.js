@@ -1,6 +1,5 @@
 const ztpricehistory = require("../models/mongoDB/ztpricehistory");
-const cliente = require("../../config/connectToRedis");
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 async function GetAllPricesHistory(req) {
   try {
@@ -103,7 +102,6 @@ async function DeleteOnePriceHistory(req) {
   }
 }
 
-
 // Servicio para hacer el lookup entre ZTLABELS y ZTVALUES
 async function GetLabelsWithValues() {
   try {
@@ -115,9 +113,9 @@ async function GetLabelsWithValues() {
             from: "ZTVALUES",
             localField: "LABELID",
             foreignField: "LABELID",
-            as: "VALUES"
-          }
-        }
+            as: "VALUES",
+          },
+        },
       ])
       .toArray();
 
@@ -128,185 +126,10 @@ async function GetLabelsWithValues() {
   }
 }
 
-
-
-
-
-//-------------------------------------------------------REDIS------------------------------------------------------------
-async function GetAllPricesHistoryRedis(req) {
-  try {
-    // Obtener todas las claves desde Redis
-    const allKeys = await cliente.keys("*");
-
-    if (!allKeys || allKeys.length === 0) {
-      throw new Error("No se encontraron las keys");
-    }
-
-    // Array para almacenar los resultados
-    const allData = [];
-
-    // Iterar sobre todas las claves obtenidas
-    for (const key of allKeys) {
-      // Obtener el valor de cada clave
-      const value = await cliente.get(key);
-
-      // Verificar si se obtuvo un valor
-      if (value) {
-        try {
-          // Intentar parsear el valor si es posible
-          allData.push({ key, value: JSON.parse(value) });
-        } catch (parseError) {
-          // Si no se puede parsear, almacenar el valor tal cual
-          allData.push({ key, value });
-        }
-      }
-    }
-
-    // Devolver todos los resultados
-    return allData;
-  } catch (error) {
-    throw new Error(`Error al obtener los datos de  Redis: ${error.message}`);
-  }
-}
-
-async function GetByIdPricesHistoryRedis(req) {
-  try {
-    const key = req.req.query?.key;
-
-    if (!key) {
-      throw new Error("El parámetro 'key' es obligatorio.");
-    }
-
-    // Obtener el valor desde Redis (sin RedisJSON, usando el comando estándar GET)
-    const value = await cliente.get(key);
-
-    return JSON.parse(value);
-  } catch (error) {
-    console.error("Error:", error.message);
-    throw new Error(`Error al obtener los datos: ${error.message}`);
-  }
-}
-
-async function AddOnePricesHistoryRedis(req) {
-  try {
-    const key = req.req.query?.key; // Obtener la clave desde la URL
-    const newPrices = req.req.body?.prices; // Obtener los datos nuevos del body de la solicitud
-
-    // Validar si la clave existe
-    if (!key) {
-      throw new Error("El parámetro 'key' es obligatorio.");
-    }
-
-    // Validar si los datos del body están presentes
-    if (!newPrices || Object.keys(newPrices).length === 0) {
-      throw new Error("El body debe contener los datos que se agregarán.");
-    }
-
-    // Convertir el objeto de precios a string JSON para almacenarlo en Redis
-    const valueToStore = JSON.stringify(newPrices);
-
-    // Guardar el valor en Redis usando el comando SET
-    await cliente.set(key, valueToStore);
-
-    // Obtener los datos recién insertados para mostrarlos
-    const storedData = await cliente.get(key);
-
-    // Retornar una respuesta exitosa junto con los datos insertados
-    return {
-      "Datos insertados": JSON.parse(storedData), // Convertir a objeto para retornarlo
-    };
-  } catch (error) {
-    // Manejo de errores y log
-    console.error("Error:", error.message);
-    throw new Error(`Error al agregar datos a redis: ${error.message}`);
-  }
-}
-
-async function UpdateOnePriceHistoryRedis(req) {
-  try {
-    const key = req.req.query?.key;
-    const newPrices = req.req.body?.prices; // Obtener los datos nuevos del body de la solicitud
-
-    // Validar si la clave existe
-    if (!key) {
-      throw new Error("El parámetro 'key' es obligatorio.");
-    }
-
-    // Validar si los datos del body están presentes
-    if (!newPrices || Object.keys(newPrices).length === 0) {
-      throw new Error("El body debe contener los datos que se agregarán.");
-    }
-
-    // Verificar si la clave existe antes de actualizar
-    const exists = await cliente.exists(key);
-    if (!exists) {
-      throw new Error(
-        `La clave '${key}' no existe en Redis. No se puede actualizar.`
-      );
-    }
-
-    // Convertir el objeto de precios a string JSON para almacenarlo en Redis
-    const valueToStore = JSON.stringify(newPrices);
-
-    // Actualizar el valor en Redis usando el comando SET
-    await cliente.set(key, valueToStore);
-
-    // Obtener los datos actualizados para mostrarlos
-    const storedData = await cliente.get(key);
-
-    // Retornar una respuesta exitosa junto con los datos actualizados
-    return {
-      message: `Los datos con la clave '${key}' fueron actualizados exitosamente.`,
-      updatedData: JSON.parse(storedData), // Convertir a objeto para retornarlo
-    };
-  } catch (error) {
-    // Manejo de errores y log
-    console.error("Error:", error.message);
-    throw new Error(`Error al actualizar datos en Redis: ${error.message}`);
-  }
-}
-
-async function DeleteOnePricesHistoryRedis(req) {
-  try {
-    const key = req.req.query?.key; // Obtener la clave desde la URL
-
-    // Validar si la clave existe
-    if (!key) {
-      throw new Error("El parámetro 'key' es obligatorio.");
-    }
-
-    // Verificar si la clave existe antes de eliminarla
-    const exists = await cliente.exists(key);
-    if (!exists) {
-      throw new Error(`La clave ${key} no existe en Redis.`);
-    }
-
-    // Eliminar la clave de Redis
-    const result = await cliente.del(key);
-
-    // Verificar si la eliminación fue exitosa
-    if (result === 1) {
-      return {
-        message: `Los datos con la clave ${key} fueron eliminados exitosamente de Redis.`,
-      };
-    } else {
-      throw new Error(`No se pudo eliminar la clave ${key}.`);
-    }
-  } catch (error) {
-    // Manejo de errores y log
-    throw new Error(`Error al eliminar datos de Redis: ${error.message}`);
-  }
-}
-
 module.exports = {
   GetAllPricesHistory,
   AddOnePricesHistory,
   UpdateOnePriceHistory,
   DeleteOnePriceHistory,
-  GetAllPricesHistoryRedis,
-  GetByIdPricesHistoryRedis,
-  AddOnePricesHistoryRedis,
-  UpdateOnePriceHistoryRedis,
-  DeleteOnePricesHistoryRedis,
   GetLabelsWithValues,
 };
