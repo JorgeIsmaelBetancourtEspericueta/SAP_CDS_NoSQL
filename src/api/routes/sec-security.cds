@@ -12,6 +12,7 @@ service securityRouter @(path: '/api/security') {
     // 4. Instance the users entity
     entity entusers as projection on mysec.users;
 
+
     @Core.Description: 'get-Catalog'
     @path            : 'catalogs'
     function catalogs()                   returns array of entusers;
