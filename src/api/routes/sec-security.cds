@@ -35,4 +35,8 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'create-value'
     @path            : 'createvalue'
     action   createvalue(values : entvalues) returns array of entvalues;
+
+    @Core.Description: 'update-value'
+    @path            : 'updatevalue'
+    action   updatevalue(values : entvalues) returns array of entvalues;
 };

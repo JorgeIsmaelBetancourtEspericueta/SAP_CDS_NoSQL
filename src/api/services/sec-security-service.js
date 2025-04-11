@@ -831,10 +831,119 @@ async function CreateValue(req) {
   }
 }
 
+// Servicio para actualizar un registro de ZTVALUES
+async function UpdateValue(req) {
+  try {
+    // Obtener VALUEID desde los query parameters
+    const { valueid } = req?.req?.query;
+
+    if (!valueid) {
+      throw new Error("El parámetro VALUEID es obligatorio para realizar la actualización.");
+    }
+
+    // Desestructuración de las propiedades del body (solo las que se proporcionen)
+    const {
+      LABELID,
+      VALUEPAID,
+      VALUE,
+      ALIAS,
+      SEQUENCE,
+      IMAGE,
+      VALUESAPID,
+      DESCRIPTION,
+      ROUTE,
+      ACTIVED,
+      DELETED,
+      reguser,
+    } = req?.req?.body?.values || {};
+
+    const currentDate = new Date();
+
+    // Validaciones (similar a CreateValue)
+    const validLabels = ["IdApplications", "IdView", "IdProcesses", "IdPrivileges", "IdRoles"];
+
+    if (LABELID && !validLabels.includes(LABELID)) {
+      throw new Error(`LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`);
+    }
+
+    if (LABELID === "IdApplications" && VALUEPAID) {
+      throw new Error("VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre.");
+    }
+
+    if (LABELID && LABELID !== "IdApplications" && VALUEPAID) {
+      const labelIndex = validLabels.indexOf(LABELID);
+      const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
+
+      if (!VALUEPAID.startsWith(`${parentLabel} -`)) {
+        throw new Error(
+          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${LABELID} es hijo de ${parentLabel}.`
+        );
+      }
+
+      // Verificar la existencia del ID padre en la colección
+      const parentId = VALUEPAID.split(" - ")[1];
+      const parentExists = await mongoose.connection
+        .collection("ZTVALUES")
+        .findOne({ LABELID: parentLabel, VALUEID: parentId });
+
+      if (!parentExists) {
+        throw new Error(`El ID padre especificado (${parentId}) no existe en la colección ZTVALUES como ${parentLabel}.`);
+      }
+    }
+
+    // Construcción dinámica del objeto de actualización
+    const updateFields = {};
+    if (LABELID) updateFields.LABELID = LABELID;
+    if (VALUEPAID) updateFields.VALUEPAID = VALUEPAID;
+    if (VALUE) updateFields.VALUE = VALUE;
+    if (ALIAS) updateFields.ALIAS = ALIAS;
+    if (SEQUENCE !== undefined) updateFields.SEQUENCE = SEQUENCE;
+    if (IMAGE) updateFields.IMAGE = IMAGE;
+    if (VALUESAPID) updateFields.VALUESAPID = VALUESAPID;
+    if (DESCRIPTION) updateFields.DESCRIPTION = DESCRIPTION;
+    if (ROUTE) updateFields.ROUTE = ROUTE;
+    if (ACTIVED !== undefined) updateFields["DETAIL_ROW.ACTIVED"] = ACTIVED;
+    if (DELETED !== undefined) updateFields["DETAIL_ROW.DELETED"] = DELETED;
+
+    updateFields["DETAIL_ROW_REG"] = [
+      {
+        CURRENT: false,
+        REGDATE: currentDate,
+        REGTIME: currentDate,
+        REGUSER: reguser || "",
+      },
+      {
+        CURRENT: true,
+        REGDATE: currentDate,
+        REGTIME: currentDate,
+        REGUSER: reguser || "",
+      },
+    ];
+
+    // Realizar la actualización en la colección
+    const result = await mongoose.connection
+      .collection("ZTVALUES")
+      .updateOne({ VALUEID: valueid }, { $set: updateFields });
+
+    if (result.modifiedCount === 0) {
+      throw new Error("No se encontró el registro con el VALUEID proporcionado o no se realizó la actualización.");
+    }
+
+    return {
+      message: "ZTValue actualizado exitosamente",
+      updatedFields: updateFields,
+    };
+  } catch (error) {
+    console.error("Error al actualizar el ZTValue:", error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   GetLabelsWithValues,
   GetUserInfo,
   CreateUser,
   DeleteRecord,
   CreateValue,
+  UpdateValue
 };

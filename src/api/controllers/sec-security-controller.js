@@ -8,6 +8,7 @@ const {
   CreateUser,
   DeleteRecord,
   CreateValue,
+  UpdateValue,
 } = require("../services/sec-security-service");
 //Principal structure controller class
 
@@ -36,6 +37,10 @@ class InversionsClass extends cds.ApplicationService {
 
     this.on("createvalue", async (req) => {
       return CreateValue(req);
+    });
+
+    this.on("updatevalue", async (req) => {
+      return UpdateValue(req);
     });
 
     return await super.init();
