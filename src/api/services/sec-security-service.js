@@ -725,7 +725,7 @@ async function DeleteRecord(req) {
 // Servicio para crear un nuevo ZTVALUES
 async function CreateValue(req) {
   try {
-    //Desectructuración para una aplicacion
+    // Desestructuración para una aplicación
     const {
       COMPANYID,
       CEDIID,
@@ -743,8 +743,6 @@ async function CreateValue(req) {
       DELETED = false,
       reguser,
     } = req?.req?.body?.values;
-
-    console.log(COMPANYID);
 
     const currentDate = new Date();
 
@@ -764,10 +762,43 @@ async function CreateValue(req) {
       },
     ];
 
+    // Validaciones
+    const validLabels = ["IdApplications", "IdViews", "IdProcesses", "IdPrivileges", "IdRoles"];
+    
+    if (!validLabels.includes(LABELID)) {
+      throw new Error(`LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`);
+    }
+
+    if (LABELID === "IdApplications" && VALUEPAID) {
+      throw new Error("VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre.");
+    }
+
+    if (LABELID !== "IdApplications") {
+      // Verificar que VALUEPAID esté en el formato esperado y que el ID padre exista
+      const labelIndex = validLabels.indexOf(LABELID);
+      const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
+
+      if (!VALUEPAID || !VALUEPAID.startsWith(`${parentLabel} -`)) {
+        throw new Error(
+          `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${LABELID} es hijo de ${parentLabel}.`
+        );
+      }
+
+      // Verificar la existencia del ID padre en la colección
+      const parentId = VALUEPAID.split(" - ")[1]; // Extraer el ID del registro padre
+      const parentExists = await mongoose.connection
+        .collection("ZTVALUES")
+        .findOne({ LABELID: parentLabel, VALUEID: parentId });
+
+      if (!parentExists) {
+        throw new Error(`El ID padre especificado (${parentId}) no existe en la colección ZTVALUES como ${parentLabel}.`);
+      }
+    }
+
     // Crear el nuevo objeto ZTVALUES
     const newZTValue = {
-      COMPANYID: COMPANYID,
-      CEDIID: CEDIID,
+      COMPANYID: COMPANYID || null,
+      CEDIID: CEDIID || null,
       LABELID: LABELID || "",
       VALUEPAID: VALUEPAID || "",
       VALUEID: VALUEID || "",
