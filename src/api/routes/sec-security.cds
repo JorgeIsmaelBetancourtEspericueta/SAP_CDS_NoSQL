@@ -11,6 +11,7 @@ service securityRouter @(path: '/api/security') {
 
     // 4. Instance the users entity
     entity entusers as projection on mysec.users;
+    entity entvalues as projection on mysec.values;
 
     @Core.Description: 'get-Catalog'
     @path            : 'catalogs'
@@ -27,4 +28,8 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'delete-fisico-logico'
     @path            : 'delete'
     action   delete()                     returns array of entusers;
+
+    @Core.Description: 'create-value'
+    @path            : 'createvalue'
+    action   createvalue(values: entvalues)              returns array of entvalues;
 };

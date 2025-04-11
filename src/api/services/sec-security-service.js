@@ -721,9 +721,84 @@ async function DeleteRecord(req) {
   }
 }
 
+
+// Servicio para crear un nuevo ZTVALUES
+async function CreateValue(req) {
+  try {
+    const {
+      COMPANYID,
+      CEDIID,
+      LABELID,
+      VALUEID,
+      VALUE,
+      ALIAS,
+      SEQUENCE,
+      IMAGE,
+      VALUESAPID,
+      DESCRIPTION,
+      ROUTE,
+      ACTIVED = true,
+      DELETED = false,
+      reguser,
+    } = req?.req?.body?.ztvalue;
+
+    const currentDate = new Date();
+
+    // Sección para DETAIL_ROW_REG
+    const detailRowReg = [
+      {
+        CURRENT: false,
+        REGDATE: currentDate,
+        REGTIME: currentDate,
+        REGUSER: reguser,
+      },
+      {
+        CURRENT: true,
+        REGDATE: currentDate,
+        REGTIME: currentDate,
+        REGUSER: reguser,
+      },
+    ];
+
+    // Crear el nuevo objeto ZTVALUES
+    const newZTValue = {
+      COMPANYID: COMPANYID || null,
+      CEDIID: CEDIID || null,
+      LABELID: LABELID || "",
+      VALUEID: VALUEID || "",
+      VALUE: VALUE || "",
+      ALIAS: ALIAS || "",
+      SEQUENCE: SEQUENCE || 0,
+      IMAGE: IMAGE || "",
+      VALUESAPID: VALUESAPID || "",
+      DESCRIPTION: DESCRIPTION || "",
+      ROUTE: ROUTE || "",
+      DETAIL_ROW: {
+        ACTIVED,
+        DELETED,
+      },
+      DETAIL_ROW_REG: detailRowReg,
+    };
+
+    // Inserción del nuevo documento
+    const result = await mongoose.connection
+      .collection("ZTVALUES")
+      .insertOne(newZTValue);
+
+    return {
+      message: "ZTValue creado exitosamente",
+      ztvalueId: result.insertedId,
+    };
+  } catch (error) {
+    console.error("Error al crear el ZTValue:", error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   GetLabelsWithValues,
   GetUserInfo,
   CreateUser,
   DeleteRecord,
+  CreateValue
 };
