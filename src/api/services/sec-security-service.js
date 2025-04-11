@@ -778,14 +778,14 @@ async function CreateValue(req) {
       const labelIndex = validLabels.indexOf(LABELID);
       const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
 
-      if (!VALUEPAID || !VALUEPAID.startsWith(`${parentLabel} -`)) {
+      if (!VALUEPAID || !VALUEPAID.startsWith(`${parentLabel}-`)) {
         throw new Error(
           `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${LABELID} es hijo de ${parentLabel}.`
         );
       }
 
       // Verificar la existencia del ID padre en la colección
-      const parentId = VALUEPAID.split(" - ")[1]; // Extraer el ID del registro padre
+      const parentId = VALUEPAID.split("-")[1]; // Extraer el ID del registro padre
       const parentExists = await mongoose.connection
         .collection("ZTVALUES")
         .findOne({ LABELID: parentLabel, VALUEID: parentId });
@@ -886,14 +886,14 @@ async function UpdateValue(req) {
       const labelIndex = validLabels.indexOf(currentLabelId);
       const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
 
-      if (!VALUEPAID.startsWith(`${parentLabel} -`)) {
+      if (!VALUEPAID.startsWith(`${parentLabel}-`)) {
         throw new Error(
           `VALUEPAID debe seguir el formato "${parentLabel} - <IdRegistro>", ya que ${currentLabelId} es hijo de ${parentLabel}.`
         );
       }
 
       // Verificar la existencia del ID padre en la colección
-      const parentId = VALUEPAID.split(" - ")[1];
+      const parentId = VALUEPAID.split("-")[1];
       const parentExists = await mongoose.connection
         .collection("ZTVALUES")
         .findOne({ LABELID: parentLabel, VALUEID: parentId });
