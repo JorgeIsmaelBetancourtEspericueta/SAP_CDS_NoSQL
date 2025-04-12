@@ -584,6 +584,7 @@ async function CreateUser(req) {
 
     const currentDate = new Date();
 
+    // Sección para DETAIL_ROW_REG
     const detailRowReg = [
       {
         CURRENT: false,
@@ -645,8 +646,12 @@ async function CreateUser(req) {
       REGION: REGION || "",
       STATE: STATE || "",
       COUNTRY: COUNTRY || "",
-      DETAIL_ROW_REG: detailRowReg,
       ROLES: ROLES || [],
+      DETAIL_ROW: {
+        ACTIVED: true,
+        DELETED: false,
+        DETAIL_ROW_REG: detailRowReg,
+      },
     };
 
     const result = await mongoose.connection
