@@ -40,6 +40,11 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'update-value'
     @path            : 'updatevalue'
     action   updatevalue(values : entvalues) returns array of entvalues;
+    
+    @Core.Description: 'update-a-single-user'
+    @path            : 'updateoneuser'
+    action   updateoneuser(users:entusers) returns array of entusers
+
 
     @Core.Description: 'get-UserRoles'
     @path            : 'getUserRoles'
@@ -56,4 +61,5 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'update-role'
     @path            : 'updaterole'
     action   updaterole(roles : entroles)    returns array of entroles;
+
 };

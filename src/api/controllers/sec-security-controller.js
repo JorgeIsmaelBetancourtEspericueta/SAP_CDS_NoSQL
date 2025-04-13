@@ -9,6 +9,7 @@ const {
   DeleteRecord,
   CreateValue,
   UpdateValue,
+  updateoneuser,
   GetRoles,
   GetUserRoles,
   CreateRole,
@@ -64,6 +65,10 @@ class InversionsClass extends cds.ApplicationService {
     this.on("updaterole", async (req) => {
       // call the service method and return the result to route.
       return UpdateRole(req);
+    });
+
+    this.on("updateoneuser", async (req) => {
+      return updateoneuser(req);
     });
 
     return await super.init();
