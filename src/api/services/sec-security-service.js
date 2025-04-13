@@ -15,7 +15,7 @@ async function GetLabelsWithValues(req) {
         .aggregate([
           {
             $lookup: {
-              from: "SS",
+              from: "ZTVALUES",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
@@ -33,7 +33,7 @@ async function GetLabelsWithValues(req) {
           },
           {
             $lookup: {
-              from: "SS",
+              from: "ZTVALUES",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
@@ -51,7 +51,7 @@ async function GetLabelsWithValues(req) {
           },
           {
             $lookup: {
-              from: "SS",
+              from: "ZTVALUES",
               localField: "LABELID",
               foreignField: "LABELID",
               as: "VALUES",
