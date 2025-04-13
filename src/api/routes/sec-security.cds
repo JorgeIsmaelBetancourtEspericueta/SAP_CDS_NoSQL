@@ -39,4 +39,9 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'update-value'
     @path            : 'updatevalue'
     action   updatevalue(values : entvalues) returns array of entvalues;
+    //Bolillo
+    @Core.Description: 'update-a-single-user'
+    @path            : 'updateoneuser'
+    action   updateoneuser(users:entusers) returns array of entusers
+
 };
