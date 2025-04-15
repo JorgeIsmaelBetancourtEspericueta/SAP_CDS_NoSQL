@@ -675,7 +675,7 @@ async function updateoneuser(req) {
     if (!userid || !users || typeof users !== "object") {
       return {
         error: true,
-        message: "Faltan datos requeridos: USERID o body inválido."
+        message: "Faltan datos requeridos: USERID o body inválido.",
       };
     }
 
@@ -684,36 +684,42 @@ async function updateoneuser(req) {
       const newRoleId = users.ROLES[0].ROLEID;
 
       // Verificar si el nuevo rol ya está asignado
-      const userData = await mongoose.connection.collection("ZTUSERS").findOne({ USERID: userid });
+      const userData = await mongoose.connection
+        .collection("ZTUSERS")
+        .findOne({ USERID: userid });
       if (!userData) {
         return {
           error: true,
-          message: `No se encontró el usuario '${userid}'.`
+          message: `No se encontró el usuario '${userid}'.`,
         };
       }
 
-      const alreadyHasNewRole = userData.ROLES?.some(r => r.ROLEID === newRoleId);
+      const alreadyHasNewRole = userData.ROLES?.some(
+        (r) => r.ROLEID === newRoleId
+      );
       if (alreadyHasNewRole) {
         return {
           error: true,
-          message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`
+          message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
         };
       }
 
-      const hasOldRole = userData.ROLES?.some(r => r.ROLEID === roleid);
+      const hasOldRole = userData.ROLES?.some((r) => r.ROLEID === roleid);
       if (!hasOldRole) {
         return {
           error: true,
-          message: `El usuario no tiene el ROLEID '${roleid}' asignado.`
+          message: `El usuario no tiene el ROLEID '${roleid}' asignado.`,
         };
       }
 
       // Verifica si el nuevo ROLEID existe
-      const newRoleData = await mongoose.connection.collection("ZTROLES").findOne({ ROLEID: newRoleId });
+      const newRoleData = await mongoose.connection
+        .collection("ZTROLES")
+        .findOne({ ROLEID: newRoleId });
       if (!newRoleData) {
         return {
           error: true,
-          message: `El nuevo ROLEID '${newRoleId}' no existe en ZTROLES.`
+          message: `El nuevo ROLEID '${newRoleId}' no existe en ZTROLES.`,
         };
       }
 
@@ -721,12 +727,12 @@ async function updateoneuser(req) {
       await mongoose.connection.collection("ZTUSERS").updateOne(
         {
           USERID: userid,
-          "ROLES.ROLEID": roleid
+          "ROLES.ROLEID": roleid,
         },
         {
           $set: {
-            "ROLES.$.ROLEID": newRoleId
-          }
+            "ROLES.$.ROLEID": newRoleId,
+          },
         }
       );
     }
@@ -736,30 +742,35 @@ async function updateoneuser(req) {
 
     // Actualiza los otros campos si hay alguno
     if (Object.keys(otherFields).length > 0) {
-      await mongoose.connection.collection("ZTUSERS").updateOne(
-        { USERID: userid },
-        { $set: otherFields }
-      );
+      await mongoose.connection
+        .collection("ZTUSERS")
+        .updateOne({ USERID: userid }, { $set: otherFields });
     }
 
     // Si no se especificó roleid pero sí se quiere agregar uno nuevo
     if (!roleid && users?.ROLES?.[0]?.ROLEID) {
       const newRoleId = users.ROLES[0].ROLEID;
 
-      const newRoleData = await mongoose.connection.collection("ZTROLES").findOne({ ROLEID: newRoleId });
+      const newRoleData = await mongoose.connection
+        .collection("ZTROLES")
+        .findOne({ ROLEID: newRoleId });
       if (!newRoleData) {
         return {
           error: true,
-          message: `El ROLEID '${newRoleId}' no existe en ZTROLES.`
+          message: `El ROLEID '${newRoleId}' no existe en ZTROLES.`,
         };
       }
 
-      const userData = await mongoose.connection.collection("ZTUSERS").findOne({ USERID: userid });
-      const alreadyHasRole = userData?.ROLES?.some(r => r.ROLEID === newRoleId);
+      const userData = await mongoose.connection
+        .collection("ZTUSERS")
+        .findOne({ USERID: userid });
+      const alreadyHasRole = userData?.ROLES?.some(
+        (r) => r.ROLEID === newRoleId
+      );
       if (alreadyHasRole) {
         return {
           error: true,
-          message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`
+          message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
         };
       }
 
@@ -769,30 +780,23 @@ async function updateoneuser(req) {
         {
           $push: {
             ROLES: {
-              ROLEID: newRoleData.ROLEID
-             
-            }
-          }
+              ROLEID: newRoleData.ROLEID,
+            },
+          },
         }
       );
     }
 
     return {
-      message: `El usuario '${userid}' fue actualizado correctamente.`
+      message: `El usuario '${userid}' fue actualizado correctamente.`,
     };
-
   } catch (err) {
     return {
       error: true,
-      message: `Ocurrió un error al actualizar el usuario: ${err.message}`
+      message: `Ocurrió un error al actualizar el usuario: ${err.message}`,
     };
   }
 }
-
-
-
-
-
 
 // Servicio para eliminar un registro de la colección correspondiente (por query params)
 
@@ -816,7 +820,6 @@ async function DeleteRecord(req) {
       const updateFields = {
         "DETAIL_ROW.ACTIVED": false,
         "DETAIL_ROW.DELETED": true,
-        "DETAIL_ROW.DELETEDDATE": currentDate,
       };
 
       if (borrado !== "fisic") {
@@ -1407,8 +1410,7 @@ async function UpdateRole(req) {
       return req.error(400, "No se proporcionaron campos para actualizar");
     }
 
-    await collection.
-  e({ ROLEID }, { $set: updatedFields });
+    await collection.e({ ROLEID }, { $set: updatedFields });
 
     const updatedRole = await collection.findOne({ ROLEID });
 
@@ -1434,5 +1436,4 @@ module.exports = {
   GetRoles,
   CreateRole,
   UpdateRole,
-
 };

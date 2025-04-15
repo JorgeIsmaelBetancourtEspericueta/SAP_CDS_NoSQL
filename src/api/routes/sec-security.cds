@@ -19,7 +19,7 @@ service securityRouter @(path: '/api/security') {
 
     @Core.Description: 'get-Catalog'
     @path            : 'catalogs'
-    function catalogs()                      returns array of entusers;
+    function catalogs()                      returns array of entvalues;
 
     @Core.Description: 'get-users'
     @path            : 'users'
