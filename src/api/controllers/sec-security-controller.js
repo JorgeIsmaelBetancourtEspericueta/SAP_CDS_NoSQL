@@ -14,6 +14,7 @@ const {
   GetUserRoles,
   CreateRole,
   UpdateRole,
+  CrudRoles,
 } = require("../services/sec-security-service");
 //Principal structure controller class
 
@@ -69,6 +70,10 @@ class InversionsClass extends cds.ApplicationService {
 
     this.on("updateoneuser", async (req) => {
       return updateoneuser(req);
+    });
+
+    this.on("crudRoles", async (req) => {
+      return CrudRoles(req);
     });
 
     return await super.init();

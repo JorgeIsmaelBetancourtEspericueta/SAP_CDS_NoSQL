@@ -1424,6 +1424,122 @@ async function UpdateRole(req) {
   }
 }
 
+async function CrudRoles(req) {
+  try {
+    const action = req.req.query.action;
+    const roleid = req.req.query?.roleid;
+
+    if (!action) {
+      throw new Error("El parámetro 'action' es obligatorio.");
+    }
+
+    switch (action) {
+      case "create":
+        try {
+          const {
+            ROLEID,
+            ROLENAME,
+            DESCRIPTION,
+            PRIVILEGES,
+            ACTIVED = true,
+            DELETED = false,
+            reguser,
+          } = req.data.roles;
+      
+          if (!ROLEID || !ROLENAME || !Array.isArray(PRIVILEGES)) {
+            return req.error(400, "Datos incompletos o inválidos");
+          }
+      
+          const exists = await mongoose.connection
+            .collection("ZTROLES")
+            .findOne({ ROLEID });
+      
+          if (exists) {
+            return req.error(409, `Ya existe un rol con el ID ${ROLEID}`);
+          }
+      
+          const currentDate = new Date();
+      
+          // Sección para DETAIL_ROW_REG
+          const detailRow = [
+            {
+              CURRENT: false,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser,
+            },
+            {
+              CURRENT: true,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser,
+            },
+          ];
+          const newRole = {
+            ROLEID,
+            ROLENAME,
+            DESCRIPTION: DESCRIPTION || "",
+            PRIVILEGES,
+            DETAIL_ROW: {
+              ACTIVED,
+              DELETED,
+              DETAIL_ROW_REG: detailRow,
+            },
+          };
+          await mongoose.connection.collection("ZTROLES").insertOne(newRole);
+          return { message: "Rol creado exitosamente", role: newRole };
+        } catch (error) {
+          console.error("Error al crear el rol:", error.message);
+          return req.error(500, "Error interno del servidor");
+        }
+      case "update":
+        try {
+          const { ROLEID, ROLENAME, DESCRIPTION, PRIVILEGES, DETAIL_ROW } =
+            req.data.roles;
+      
+          if (!ROLEID) {
+            return req.error(400, "El campo ROLEID es obligatorio para actualizar");
+          }
+      
+          const collection = mongoose.connection.collection("ZTROLES");
+      
+          const exists = await collection.findOne({ ROLEID });
+      
+          if (!exists) {
+            return req.error(404, `No se encontró un rol con el ID ${ROLEID}`);
+          }
+      
+          const updatedFields = {
+            ...(ROLENAME && { ROLENAME }),
+            ...(DESCRIPTION && { DESCRIPTION }),
+            ...(Array.isArray(PRIVILEGES) && { PRIVILEGES }),
+            ...(Array.isArray(DETAIL_ROW) && { DETAIL_ROW }),
+          };
+      
+          if (Object.keys(updatedFields).length === 0) {
+            return req.error(400, "No se proporcionaron campos para actualizar");
+          }
+      
+          await collection.updateOne({ ROLEID }, { $set: updatedFields });
+      
+          const updatedRole = await collection.findOne({ ROLEID });
+      
+          return {
+            message: "Rol actualizado exitosamente",
+            role: updatedRole,
+          };
+        } catch (error) {
+          console.error("Error al actualizar el rol:", error.message);
+          return req.error(500, "Error interno del servidor");
+        } 
+      default:
+      throw new Error("Acción no válida. Las acciones permitidas son: create, update");
+    }
+
+  }catch (error) {
+  }
+}
+
 module.exports = {
   GetLabelsWithValues,
   GetUserInfo,
@@ -1436,4 +1552,5 @@ module.exports = {
   GetRoles,
   CreateRole,
   UpdateRole,
+  CrudRoles,
 };

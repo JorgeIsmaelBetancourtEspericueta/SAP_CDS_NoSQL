@@ -62,4 +62,8 @@ service securityRouter @(path: '/api/security') {
     @path            : 'updaterole'
     action   updaterole(roles : entroles)    returns array of entroles;
 
+    @Core.Description: 'crud-roles'
+    @path            : 'crudRoles'
+    action   crudRoles(roles : entroles)    returns array of entroles;
+
 };
