@@ -92,7 +92,9 @@ async function CrudUsers(req) {
       case "getUserInfo": // Servicio para obtener usuarios con sus roles, procesos, vistas y aplicaciones
         try {
           let result;
-      
+
+          const userid = req?.req?.query?.userid;
+
           if (!userid) {
             result = await mongoose.connection
               .collection("ZTUSERS")
@@ -125,7 +127,7 @@ async function CrudUsers(req) {
                 { $unwind: "$ROLE_DETAIL.PRIVILEGES" },
                 {
                   $lookup: {
-                    from: "SS",
+                    from: "ZTVALUES",
                     let: { processId: "$ROLE_DETAIL.PRIVILEGES.PROCESSID" },
                     pipeline: [
                       {
@@ -145,7 +147,7 @@ async function CrudUsers(req) {
                       },
                       {
                         $lookup: {
-                          from: "SS",
+                          from: "ZTVALUES",
                           let: { viewId: "$VALUEPAID" },
                           pipeline: [
                             {
@@ -165,14 +167,16 @@ async function CrudUsers(req) {
                             },
                             {
                               $lookup: {
-                                from: "SS",
+                                from: "ZTVALUES",
                                 let: { appId: "$VALUEPAID" },
                                 pipeline: [
                                   {
                                     $match: {
                                       $expr: {
                                         $and: [
-                                          { $eq: ["$LABELID", "IdApplications"] },
+                                          {
+                                            $eq: ["$LABELID", "IdApplications"],
+                                          },
                                           {
                                             $eq: [
                                               {
@@ -194,7 +198,9 @@ async function CrudUsers(req) {
                             },
                             {
                               $addFields: {
-                                application: { $arrayElemAt: ["$application", 0] },
+                                application: {
+                                  $arrayElemAt: ["$application", 0],
+                                },
                               },
                             },
                           ],
@@ -401,7 +407,9 @@ async function CrudUsers(req) {
                                     $match: {
                                       $expr: {
                                         $and: [
-                                          { $eq: ["$LABELID", "IdApplications"] },
+                                          {
+                                            $eq: ["$LABELID", "IdApplications"],
+                                          },
                                           {
                                             $eq: [
                                               {
@@ -423,7 +431,9 @@ async function CrudUsers(req) {
                             },
                             {
                               $addFields: {
-                                application: { $arrayElemAt: ["$application", 0] },
+                                application: {
+                                  $arrayElemAt: ["$application", 0],
+                                },
                               },
                             },
                           ],
@@ -548,7 +558,7 @@ async function CrudUsers(req) {
               ])
               .toArray();
           }
-      
+
           return result;
         } catch (error) {
           console.error(
@@ -585,9 +595,9 @@ async function CrudUsers(req) {
             ROLES,
             reguser,
           } = req?.req?.body?.users;
-      
+
           const currentDate = new Date();
-      
+
           // Sección para DETAIL_ROW_REG
           const detailRowReg = [
             {
@@ -603,29 +613,29 @@ async function CrudUsers(req) {
               REGUSER: reguser,
             },
           ];
-      
+
           // ✅ Verificación de existencia de roles en la colección ZTROLES
           const roleIds = ROLES?.map((role) => role.ROLEID) || [];
-      
+
           const existingRoles = await mongoose.connection
             .collection("ZTROLES")
             .find({ ROLEID: { $in: roleIds } })
             .project({ ROLEID: 1 }) // Solo obtenemos el campo ROLEID
             .toArray();
-      
+
           const existingRoleIds = existingRoles.map((role) => role.ROLEID);
-      
+
           const missingRoles = roleIds.filter(
             (roleId) => !existingRoleIds.includes(roleId)
           );
-      
+
           if (missingRoles.length > 0) {
             return {
               message: "Algunos roles no existen en ZTROLES",
               missingRoles,
             };
           }
-      
+
           // Crear el nuevo objeto de usuario
           const newUser = {
             USERID,
@@ -657,11 +667,11 @@ async function CrudUsers(req) {
               DETAIL_ROW_REG: detailRowReg,
             },
           };
-      
+
           const result = await mongoose.connection
             .collection("ZTUSERS")
             .insertOne(newUser);
-      
+
           return {
             message: "Usuario creado exitosamente",
             userId: result.insertedId,
@@ -674,18 +684,18 @@ async function CrudUsers(req) {
         try {
           const { userid, roleid } = req?.req?.query;
           const { users } = req?.req?.body;
-      
+
           if (!userid || !users || typeof users !== "object") {
             return {
               error: true,
               message: "Faltan datos requeridos: USERID o body inválido.",
             };
           }
-      
+
           // Verifica si se va a modificar un rol existente
           if (roleid && users?.ROLES?.[0]?.ROLEID) {
             const newRoleId = users.ROLES[0].ROLEID;
-      
+
             // Verificar si el nuevo rol ya está asignado
             const userData = await mongoose.connection
               .collection("ZTUSERS")
@@ -696,7 +706,7 @@ async function CrudUsers(req) {
                 message: `No se encontró el usuario '${userid}'.`,
               };
             }
-      
+
             const alreadyHasNewRole = userData.ROLES?.some(
               (r) => r.ROLEID === newRoleId
             );
@@ -706,7 +716,7 @@ async function CrudUsers(req) {
                 message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
               };
             }
-      
+
             const hasOldRole = userData.ROLES?.some((r) => r.ROLEID === roleid);
             if (!hasOldRole) {
               return {
@@ -714,7 +724,7 @@ async function CrudUsers(req) {
                 message: `El usuario no tiene el ROLEID '${roleid}' asignado.`,
               };
             }
-      
+
             // Verifica si el nuevo ROLEID existe
             const newRoleData = await mongoose.connection
               .collection("ZTROLES")
@@ -725,7 +735,7 @@ async function CrudUsers(req) {
                 message: `El nuevo ROLEID '${newRoleId}' no existe en ZTROLES.`,
               };
             }
-      
+
             // Actualiza el rol en la posición correspondiente
             await mongoose.connection.collection("ZTUSERS").updateOne(
               {
@@ -739,21 +749,21 @@ async function CrudUsers(req) {
               }
             );
           }
-      
+
           // Prepara campos adicionales a actualizar (sin ROLES)
           const { ROLES, ...otherFields } = users;
-      
+
           // Actualiza los otros campos si hay alguno
           if (Object.keys(otherFields).length > 0) {
             await mongoose.connection
               .collection("ZTUSERS")
               .updateOne({ USERID: userid }, { $set: otherFields });
           }
-      
+
           // Si no se especificó roleid pero sí se quiere agregar uno nuevo
           if (!roleid && users?.ROLES?.[0]?.ROLEID) {
             const newRoleId = users.ROLES[0].ROLEID;
-      
+
             const newRoleData = await mongoose.connection
               .collection("ZTROLES")
               .findOne({ ROLEID: newRoleId });
@@ -763,7 +773,7 @@ async function CrudUsers(req) {
                 message: `El ROLEID '${newRoleId}' no existe en ZTROLES.`,
               };
             }
-      
+
             const userData = await mongoose.connection
               .collection("ZTUSERS")
               .findOne({ USERID: userid });
@@ -776,7 +786,7 @@ async function CrudUsers(req) {
                 message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
               };
             }
-      
+
             // Agrega el nuevo rol
             await mongoose.connection.collection("ZTUSERS").updateOne(
               { USERID: userid },
@@ -789,7 +799,7 @@ async function CrudUsers(req) {
               }
             );
           }
-      
+
           return {
             message: `El usuario '${userid}' fue actualizado correctamente.`,
           };
@@ -800,11 +810,13 @@ async function CrudUsers(req) {
           };
         }
       default:
-        throw new Error("Acción no válida. Las acciones permitidas son: getUserInfo, create y update.");
+        throw new Error(
+          "Acción no válida. Las acciones permitidas son: getUserInfo, create y update."
+        );
     }
-  }catch (error) {
-      console.error("Error en CrudUsers:", error.message);
-    }
+  } catch (error) {
+    console.error("Error en CrudUsers:", error.message);
+  }
 }
 
 // Servicio para eliminar un registro de la colección correspondiente (por query params)
@@ -894,9 +906,9 @@ async function CrudValues(req) {
             DELETED = false,
             reguser,
           } = req?.req?.body?.values;
-      
+
           const currentDate = new Date();
-      
+
           // Sección para DETAIL_ROW_REG
           const detailRowReg = [
             {
@@ -912,7 +924,7 @@ async function CrudValues(req) {
               REGUSER: reguser,
             },
           ];
-      
+
           // Validaciones
           const validLabels = [
             "IdApplications",
@@ -921,24 +933,26 @@ async function CrudValues(req) {
             "IdRoles",
             "IdPrivileges",
           ];
-      
+
           if (!validLabels.includes(LABELID)) {
             throw new Error(
-              `LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`
+              `LABELID debe ser uno de los siguientes: ${validLabels.join(
+                ", "
+              )}`
             );
           }
-      
+
           if (LABELID === "IdApplications" && VALUEPAID) {
             throw new Error(
               "VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre."
             );
           }
-      
+
           if (LABELID !== "IdApplications") {
             // Verificar que VALUEPAID esté en el formato esperado y que el ID padre exista
             const labelIndex = validLabels.indexOf(LABELID);
             const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
-      
+
             // Validar el formato de VALUEPAID (sin espacios alrededor del guion)
             const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
             if (!regex.test(VALUEPAID)) {
@@ -946,20 +960,20 @@ async function CrudValues(req) {
                 `VALUEPAID debe seguir el formato "${parentLabel}-<IdRegistro>" sin espacios alrededor del guion.`
               );
             }
-      
+
             // Verificar la existencia del ID padre en la colección
             const parentId = VALUEPAID.split("-")[1]; // Extraer el ID del registro padre
             const parentExists = await mongoose.connection
               .collection("ZTVALUES")
               .findOne({ LABELID: parentLabel, VALUEID: parentId });
-      
+
             if (!parentExists) {
               throw new Error(
                 `El ID padre especificado (${parentId}) no existe en la colección ZTVALUES como ${parentLabel}.`
               );
             }
           }
-      
+
           // Crear el nuevo objeto ZTVALUES
           const newZTValue = {
             COMPANYID: COMPANYID || null,
@@ -980,12 +994,12 @@ async function CrudValues(req) {
               DETAIL_ROW_REG: detailRowReg,
             },
           };
-      
+
           // Inserción del nuevo documento
           const result = await mongoose.connection
             .collection("ZTVALUES")
             .insertOne(newZTValue);
-      
+
           return {
             message: "ZTValue creado exitosamente",
             ztvalueId: result.insertedId,
@@ -998,13 +1012,13 @@ async function CrudValues(req) {
         try {
           // Obtener VALUEID desde los query parameters
           const { valueid } = req?.req?.query;
-      
+
           if (!valueid) {
             throw new Error(
               "El parámetro VALUEID es obligatorio para realizar la actualización."
             );
           }
-      
+
           // Desestructuración de las propiedades del body
           const {
             LABELID,
@@ -1020,21 +1034,23 @@ async function CrudValues(req) {
             DELETED,
             reguser,
           } = req?.req?.body?.values || {};
-      
+
           const currentDate = new Date();
-      
+
           // Consultar el registro actual basado en VALUEID
           const existingRecord = await mongoose.connection
             .collection("ZTVALUES")
             .findOne({ VALUEID: valueid });
-      
+
           if (!existingRecord) {
-            throw new Error(`No se encontró un registro con el VALUEID: ${valueid}`);
+            throw new Error(
+              `No se encontró un registro con el VALUEID: ${valueid}`
+            );
           }
-      
+
           // Obtener LABELID actual del registro si no se proporciona en el body
           const currentLabelId = LABELID || existingRecord.LABELID;
-      
+
           // Validaciones (similar a CreateValue)
           const validLabels = [
             "IdApplications",
@@ -1043,23 +1059,25 @@ async function CrudValues(req) {
             "IdRoles",
             "IdPrivileges",
           ];
-      
+
           if (!validLabels.includes(currentLabelId)) {
             throw new Error(
-              `LABELID debe ser uno de los siguientes: ${validLabels.join(", ")}`
+              `LABELID debe ser uno de los siguientes: ${validLabels.join(
+                ", "
+              )}`
             );
           }
-      
+
           if (currentLabelId === "IdApplications" && VALUEPAID) {
             throw new Error(
               "VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre."
             );
           }
-      
+
           if (currentLabelId !== "IdApplications" && VALUEPAID) {
             const labelIndex = validLabels.indexOf(currentLabelId);
             const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
-      
+
             // Verificar el formato de VALUEPAID (sin espacios alrededor del guion)
             const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
             if (!regex.test(VALUEPAID)) {
@@ -1067,20 +1085,20 @@ async function CrudValues(req) {
                 `VALUEPAID debe estar en el formato "${parentLabel}-<IdRegistro>" sin espacios alrededor del guion.`
               );
             }
-      
+
             // Verificar la existencia del ID padre en la colección
             const parentId = VALUEPAID.split("-")[1];
             const parentExists = await mongoose.connection
               .collection("ZTVALUES")
               .findOne({ LABELID: parentLabel, VALUEID: parentId });
-      
+
             if (!parentExists) {
               throw new Error(
                 `El ID padre especificado (${parentId}) no existe en la colección ZTVALUES como ${parentLabel}.`
               );
             }
           }
-      
+
           // Construcción dinámica del objeto de actualización
           const updateFields = {};
           if (LABELID) updateFields.LABELID = LABELID;
@@ -1092,9 +1110,11 @@ async function CrudValues(req) {
           if (VALUESAPID) updateFields.VALUESAPID = VALUESAPID;
           if (DESCRIPTION) updateFields.DESCRIPTION = DESCRIPTION;
           if (ROUTE) updateFields.ROUTE = ROUTE;
-          if (ACTIVED !== undefined) updateFields["DETAIL_ROW.ACTIVED"] = ACTIVED;
-          if (DELETED !== undefined) updateFields["DETAIL_ROW.DELETED"] = DELETED;
-      
+          if (ACTIVED !== undefined)
+            updateFields["DETAIL_ROW.ACTIVED"] = ACTIVED;
+          if (DELETED !== undefined)
+            updateFields["DETAIL_ROW.DELETED"] = DELETED;
+
           updateFields["DETAIL_ROW_REG"] = [
             {
               CURRENT: false,
@@ -1109,18 +1129,18 @@ async function CrudValues(req) {
               REGUSER: reguser || "",
             },
           ];
-      
+
           // Realizar la actualización en la colección
           const result = await mongoose.connection
             .collection("ZTVALUES")
             .updateOne({ VALUEID: valueid }, { $set: updateFields });
-      
+
           if (result.modifiedCount === 0) {
             throw new Error(
               "No se encontró el registro con el VALUEID proporcionado o no se realizó la actualización."
             );
           }
-      
+
           return {
             message: "ZTValue actualizado exitosamente",
             updatedFields: updateFields,
@@ -1130,9 +1150,11 @@ async function CrudValues(req) {
           throw error;
         }
       default:
-        throw new Error("Acción no válida. Las acciones permitidas son: create y update.");
+        throw new Error(
+          "Acción no válida. Las acciones permitidas son: create y update."
+        );
     }
-  }catch (error) {
+  } catch (error) {
     console.error("Error en CrudValues:", error.message);
   }
 }
@@ -1158,21 +1180,21 @@ async function CrudRoles(req) {
             DELETED = false,
             reguser,
           } = req.data.roles;
-      
+
           if (!ROLEID || !ROLENAME || !Array.isArray(PRIVILEGES)) {
             return req.error(400, "Datos incompletos o inválidos");
           }
-      
+
           const exists = await mongoose.connection
             .collection("ZTROLES")
             .findOne({ ROLEID });
-      
+
           if (exists) {
             return req.error(409, `Ya existe un rol con el ID ${ROLEID}`);
           }
-      
+
           const currentDate = new Date();
-      
+
           // Sección para DETAIL_ROW_REG
           const detailRow = [
             {
@@ -1209,34 +1231,40 @@ async function CrudRoles(req) {
         try {
           const { ROLEID, ROLENAME, DESCRIPTION, PRIVILEGES, DETAIL_ROW } =
             req.data.roles;
-      
+
           if (!ROLEID) {
-            return req.error(400, "El campo ROLEID es obligatorio para actualizar");
+            return req.error(
+              400,
+              "El campo ROLEID es obligatorio para actualizar"
+            );
           }
-      
+
           const collection = mongoose.connection.collection("ZTROLES");
-      
+
           const exists = await collection.findOne({ ROLEID });
-      
+
           if (!exists) {
             return req.error(404, `No se encontró un rol con el ID ${ROLEID}`);
           }
-      
+
           const updatedFields = {
             ...(ROLENAME && { ROLENAME }),
             ...(DESCRIPTION && { DESCRIPTION }),
             ...(Array.isArray(PRIVILEGES) && { PRIVILEGES }),
             ...(Array.isArray(DETAIL_ROW) && { DETAIL_ROW }),
           };
-      
+
           if (Object.keys(updatedFields).length === 0) {
-            return req.error(400, "No se proporcionaron campos para actualizar");
+            return req.error(
+              400,
+              "No se proporcionaron campos para actualizar"
+            );
           }
-      
+
           await collection.updateOne({ ROLEID }, { $set: updatedFields });
-      
+
           const updatedRole = await collection.findOne({ ROLEID });
-      
+
           return {
             message: "Rol actualizado exitosamente",
             role: updatedRole,
@@ -1244,11 +1272,11 @@ async function CrudRoles(req) {
         } catch (error) {
           console.error("Error al actualizar el rol:", error.message);
           return req.error(500, "Error interno del servidor");
-        } 
+        }
       case "getRoles":
         try {
           let result;
-      
+
           const pipeline = [
             {
               $lookup: {
@@ -1268,7 +1296,10 @@ async function CrudRoles(req) {
                   {
                     $match: {
                       $expr: {
-                        $eq: [{ $concat: ["IdProcess-", "$VALUEID"] }, "$$processId"],
+                        $eq: [
+                          { $concat: ["IdProcess-", "$VALUEID"] },
+                          "$$processId",
+                        ],
                       },
                     },
                   },
@@ -1296,7 +1327,12 @@ async function CrudRoles(req) {
                                 $match: {
                                   $expr: {
                                     $eq: [
-                                      { $concat: ["IdApplications-", "$VALUEID"] },
+                                      {
+                                        $concat: [
+                                          "IdApplications-",
+                                          "$VALUEID",
+                                        ],
+                                      },
                                       "$$appId",
                                     ],
                                   },
@@ -1343,8 +1379,10 @@ async function CrudRoles(req) {
                     PROCESSNAME: "$processInfo.VALUE",
                     VIEWID: "$processInfo.viewInfo.VALUEID",
                     VIEWNAME: "$processInfo.viewInfo.VALUE",
-                    APPLICATIONID: "$processInfo.viewInfo.applicationInfo.VALUEID",
-                    APPLICATIONNAME: "$processInfo.viewInfo.applicationInfo.VALUE",
+                    APPLICATIONID:
+                      "$processInfo.viewInfo.applicationInfo.VALUEID",
+                    APPLICATIONNAME:
+                      "$processInfo.viewInfo.applicationInfo.VALUE",
                     PRIVILEGES: {
                       $map: {
                         input: "$ROLE_DETAILS.PRIVILEGES.PRIVILEGEID",
@@ -1371,11 +1409,11 @@ async function CrudRoles(req) {
               },
             },
           ];
-      
+
           if (roleid) {
             pipeline.unshift({ $match: { ROLEID: roleid } });
           }
-      
+
           result = await mongoose.connection
             .collection("ZTROLES")
             .aggregate(pipeline)
@@ -1429,22 +1467,26 @@ async function CrudRoles(req) {
               },
             },
           ];
-      
+
           const result = await mongoose.connection
             .collection("ZTUSERS")
             .aggregate(pipeline)
             .toArray();
-      
+
           return result;
         } catch (error) {
-          console.error("Error al obtener roles de los usuarios:", error.message);
+          console.error(
+            "Error al obtener roles de los usuarios:",
+            error.message
+          );
           throw error;
         }
       default:
-      throw new Error("Acción no válida. Las acciones permitidas son: create, update, getRoles y getUserRoles.");
+        throw new Error(
+          "Acción no válida. Las acciones permitidas son: create, update, getRoles y getUserRoles."
+        );
     }
-
-  }catch (error) {
+  } catch (error) {
     console.error("Error en CrudRoles:", error.message);
   }
 }
