@@ -21,36 +21,20 @@ service securityRouter @(path: '/api/security') {
     @path            : 'catalogs'
     function catalogs()                      returns array of entvalues;
 
-    @Core.Description: 'get-users'
-    @path            : 'users'
-    function users()                         returns array of entusers;
-
-    @Core.Description: 'create-user'
-    @path            : 'createuser'
-    action   createuser(users : entusers)    returns array of entusers;
-
     @Core.Description: 'crud-users'
     @path            : 'crudUsers'
     action   crudUsers(users : entusers)     returns array of entusers;
 
-    @Core.Description: 'delete-fisico-logico'
-    @path            : 'delete'
-    action   delete()                        returns array of entusers;
-
-    @Core.Description: 'create-value'
-    @path            : 'createvalue'
-    action   createvalue(values : entvalues) returns array of entvalues;
-
-    @Core.Description: 'update-value'
-    @path            : 'updatevalue'
-    action   updatevalue(values : entvalues) returns array of entvalues;
-
-    @Core.Description: 'update-a-single-user'
-    @path            : 'updateoneuser'
-    action   updateoneuser(users : entusers) returns array of entusers;
+    @Core.Description: 'crud-values'
+    @path            : 'crudValues'
+    action   crudValues(values : entvalues) returns array of entvalues;
 
     @Core.Description: 'crud-roles'
     @path            : 'crudRoles'
     action   crudRoles(roles : entroles)    returns array of entroles;
+
+    @Core.Description: 'delete-fisico-logico'
+    @path            : 'delete'
+    action   delete()                        returns array of entusers;
 
 };

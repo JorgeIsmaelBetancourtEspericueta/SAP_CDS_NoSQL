@@ -4,13 +4,9 @@ const cds = require("@sap/cds");
 
 const {
   GetLabelsWithValues,
-  GetUserInfo,
-  CreateUser,
   DeleteRecord,
-  CreateValue,
-  UpdateValue,
-  updateoneuser,
   CrudUsers,
+  CrudValues,
   CrudRoles,
 } = require("../services/sec-security-service");
 //Principal structure controller class
@@ -23,39 +19,21 @@ class InversionsClass extends cds.ApplicationService {
       return GetLabelsWithValues(req);
     });
 
-    this.on("users", async (req) => {
-      // call the service method and return the result to route.
-      return GetUserInfo(req);
-    });
-
-    this.on("createuser", async (req) => {
-      // call the service method and return the result to route.
-      return CreateUser(req);
-    });
-
     this.on("crudUsers", async (req) => {
       return CrudUsers(req);
+    });
+    
+    this.on("crudValues", async (req) => {
+      return CrudValues(req);
+    });
+
+    this.on("crudRoles", async (req) => {
+      return CrudRoles(req);
     });
 
     this.on("delete", async (req) => {
       // call the service method and return the result to route.
       return DeleteRecord(req);
-    });
-
-    this.on("createvalue", async (req) => {
-      return CreateValue(req);
-    });
-
-    this.on("updatevalue", async (req) => {
-      return UpdateValue(req);
-    });
-
-    this.on("updateoneuser", async (req) => {
-      return updateoneuser(req);
-    });
-
-    this.on("crudRoles", async (req) => {
-      return CrudRoles(req);
     });
 
     return await super.init();
