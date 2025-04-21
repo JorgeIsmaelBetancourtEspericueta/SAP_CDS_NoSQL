@@ -29,6 +29,10 @@ service securityRouter @(path: '/api/security') {
     @path            : 'createuser'
     action   createuser(users : entusers)    returns array of entusers;
 
+    @Core.Description: 'crud-users'
+    @path            : 'crudUsers'
+    action   crudUsers(users : entusers)     returns array of entusers;
+
     @Core.Description: 'delete-fisico-logico'
     @path            : 'delete'
     action   delete()                        returns array of entusers;
@@ -44,23 +48,6 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'update-a-single-user'
     @path            : 'updateoneuser'
     action   updateoneuser(users : entusers) returns array of entusers;
-
-
-    @Core.Description: 'get-UserRoles'
-    @path            : 'getUserRoles'
-    function getUserRoles()                  returns array of entroles;
-
-    @Core.Description: 'get-roles'
-    @path            : 'roles'
-    function roles()                         returns array of entroles;
-
-    @Core.Description: 'create-role'
-    @path            : 'createrole'
-    action   createrole(roles : entroles)    returns array of entroles;
-
-    @Core.Description: 'update-role'
-    @path            : 'updaterole'
-    action   updaterole(roles : entroles)    returns array of entroles;
 
     @Core.Description: 'crud-roles'
     @path            : 'crudRoles'

@@ -10,10 +10,7 @@ const {
   CreateValue,
   UpdateValue,
   updateoneuser,
-  GetRoles,
-  GetUserRoles,
-  CreateRole,
-  UpdateRole,
+  CrudUsers,
   CrudRoles,
 } = require("../services/sec-security-service");
 //Principal structure controller class
@@ -36,6 +33,10 @@ class InversionsClass extends cds.ApplicationService {
       return CreateUser(req);
     });
 
+    this.on("crudUsers", async (req) => {
+      return CrudUsers(req);
+    });
+
     this.on("delete", async (req) => {
       // call the service method and return the result to route.
       return DeleteRecord(req);
@@ -47,25 +48,6 @@ class InversionsClass extends cds.ApplicationService {
 
     this.on("updatevalue", async (req) => {
       return UpdateValue(req);
-    });
-    this.on("getUserRoles", async (req) => {
-      // call the service method and return the result to route.
-      return GetUserRoles(req);
-    });
-
-    this.on("roles", async (req) => {
-      // call the service method and return the result to route.
-      return GetRoles(req);
-    });
-
-    this.on("createrole", async (req) => {
-      // call the service method and return the result to route.
-      return CreateRole(req);
-    });
-
-    this.on("updaterole", async (req) => {
-      // call the service method and return the result to route.
-      return UpdateRole(req);
     });
 
     this.on("updateoneuser", async (req) => {

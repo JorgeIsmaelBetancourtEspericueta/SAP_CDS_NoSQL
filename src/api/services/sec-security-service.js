@@ -1117,313 +1117,6 @@ async function UpdateValue(req) {
   }
 }
 
-// Obtener información de roles de usuarios
-// Servicio para obtener usuarios con sus roles
-async function GetUserRoles(req) {
-  try {
-    // Eliminar la búsqueda por 'userid' para obtener todos los usuarios
-    const pipeline = [
-      { $unwind: "$ROLES" },
-      {
-        $lookup: {
-          from: "ZTROLES",
-          localField: "ROLES.ROLEID",
-          foreignField: "ROLEID",
-          as: "roleDetail",
-        },
-      },
-      {
-        $addFields: {
-          roleInfo: {
-            ROLEID: "$ROLES.ROLEID",
-            ROLENAME: { $arrayElemAt: ["$roleDetail.ROLENAME", 0] },
-            DESCRIPTION: { $arrayElemAt: ["$roleDetail.DESCRIPTION", 0] },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$_id",
-          userData: { $first: "$$ROOT" },
-          roles: { $push: "$roleInfo" },
-        },
-      },
-      {
-        $replaceRoot: {
-          newRoot: {
-            $mergeObjects: ["$userData", { ROLES: "$roles" }],
-          },
-        },
-      },
-      {
-        $project: {
-          roleDetail: 0,
-          roleInfo: 0,
-          "userData.ROLES": 0,
-        },
-      },
-    ];
-
-    const result = await mongoose.connection
-      .collection("ZTUSERS")
-      .aggregate(pipeline)
-      .toArray();
-
-    return result;
-  } catch (error) {
-    console.error("Error al obtener roles de los usuarios:", error.message);
-    throw error;
-  }
-}
-
-async function GetRoles(req) {
-  try {
-    let result;
-
-    const roleid = req?.req?.query?.roleid;
-
-    const pipeline = [
-      {
-        $lookup: {
-          from: "ZTROLES",
-          localField: "ROLEID",
-          foreignField: "ROLEID",
-          as: "ROLE_DETAILS",
-        },
-      },
-      { $unwind: "$ROLE_DETAILS" },
-      { $unwind: "$ROLE_DETAILS.PRIVILEGES" }, // Desestructurar los privilegios para procesarlos individualmente
-      {
-        $lookup: {
-          from: "ZTVALUES",
-          let: { processId: "$ROLE_DETAILS.PRIVILEGES.PROCESSID" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $eq: [{ $concat: ["IdProcess-", "$VALUEID"] }, "$$processId"],
-                },
-              },
-            },
-            {
-              $lookup: {
-                from: "ZTVALUES",
-                let: { viewId: "$VALUEPAID" },
-                pipeline: [
-                  {
-                    $match: {
-                      $expr: {
-                        $eq: [
-                          { $concat: ["IdViews-", "$VALUEID"] },
-                          "$$viewId",
-                        ],
-                      },
-                    },
-                  },
-                  {
-                    $lookup: {
-                      from: "ZTVALUES",
-                      let: { appId: "$VALUEPAID" },
-                      pipeline: [
-                        {
-                          $match: {
-                            $expr: {
-                              $eq: [
-                                { $concat: ["IdApplications-", "$VALUEID"] },
-                                "$$appId",
-                              ],
-                            },
-                          },
-                        },
-                      ],
-                      as: "applicationDetails",
-                    },
-                  },
-                  {
-                    $addFields: {
-                      applicationInfo: {
-                        $arrayElemAt: ["$applicationDetails", 0],
-                      },
-                    },
-                  },
-                ],
-                as: "viewDetails",
-              },
-            },
-            {
-              $addFields: {
-                viewInfo: { $arrayElemAt: ["$viewDetails", 0] },
-              },
-            },
-          ],
-          as: "processDetails",
-        },
-      },
-      {
-        $addFields: {
-          processInfo: { $arrayElemAt: ["$processDetails", 0] },
-        },
-      },
-      {
-        $group: {
-          _id: "$ROLEID",
-          ROLEID: { $first: "$ROLEID" },
-          ROLENAME: { $first: "$ROLE_DETAILS.ROLENAME" },
-          DESCRIPTION: { $first: "$ROLE_DETAILS.DESCRIPTION" },
-          PROCESSES: {
-            $push: {
-              PROCESSID: "$ROLE_DETAILS.PRIVILEGES.PROCESSID",
-              PROCESSNAME: "$processInfo.VALUE",
-              VIEWID: "$processInfo.viewInfo.VALUEID",
-              VIEWNAME: "$processInfo.viewInfo.VALUE",
-              APPLICATIONID: "$processInfo.viewInfo.applicationInfo.VALUEID",
-              APPLICATIONNAME: "$processInfo.viewInfo.applicationInfo.VALUE",
-              PRIVILEGES: {
-                $map: {
-                  input: "$ROLE_DETAILS.PRIVILEGES.PRIVILEGEID",
-                  as: "privId",
-                  in: {
-                    PRIVILEGEID: "$$privId",
-                    PRIVILEGENAME: "$$privId", // Asumiendo que el nombre del privilegio es el mismo que su ID
-                  },
-                },
-              },
-            },
-          },
-          DETAIL_ROW: { $first: "$ROLE_DETAILS.DETAIL_ROW" },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          ROLEID: 1,
-          ROLENAME: 1,
-          DESCRIPTION: 1,
-          PROCESSES: 1,
-          DETAIL_ROW: 1,
-        },
-      },
-    ];
-
-    if (roleid) {
-      pipeline.unshift({ $match: { ROLEID: roleid } });
-    }
-
-    result = await mongoose.connection
-      .collection("ZTROLES")
-      .aggregate(pipeline)
-      .toArray();
-    return result;
-  } catch (error) {
-    console.error("Error en la agregación de roles:", error.message);
-    throw error;
-  }
-}
-
-async function CreateRole(req) {
-  try {
-    const {
-      ROLEID,
-      ROLENAME,
-      DESCRIPTION,
-      PRIVILEGES,
-      ACTIVED = true,
-      DELETED = false,
-      reguser,
-    } = req.data.roles;
-
-    if (!ROLEID || !ROLENAME || !Array.isArray(PRIVILEGES)) {
-      return req.error(400, "Datos incompletos o inválidos");
-    }
-
-    const exists = await mongoose.connection
-      .collection("ZTROLES")
-      .findOne({ ROLEID });
-
-    if (exists) {
-      return req.error(409, `Ya existe un rol con el ID ${ROLEID}`);
-    }
-
-    const currentDate = new Date();
-
-    // Sección para DETAIL_ROW_REG
-    const detailRow = [
-      {
-        CURRENT: false,
-        REGDATE: currentDate,
-        REGTIME: currentDate,
-        REGUSER: reguser,
-      },
-      {
-        CURRENT: true,
-        REGDATE: currentDate,
-        REGTIME: currentDate,
-        REGUSER: reguser,
-      },
-    ];
-    const newRole = {
-      ROLEID,
-      ROLENAME,
-      DESCRIPTION: DESCRIPTION || "",
-      PRIVILEGES,
-      DETAIL_ROW: {
-        ACTIVED,
-        DELETED,
-        DETAIL_ROW_REG: detailRow,
-      },
-    };
-
-    await mongoose.connection.collection("ZTROLES").insertOne(newRole);
-
-    return { message: "Rol creado exitosamente", role: newRole };
-  } catch (error) {
-    console.error("Error al crear el rol:", error.message);
-    return req.error(500, "Error interno del servidor");
-  }
-}
-
-async function UpdateRole(req) {
-  try {
-    const { ROLEID, ROLENAME, DESCRIPTION, PRIVILEGES, DETAIL_ROW } =
-      req.data.roles;
-
-    if (!ROLEID) {
-      return req.error(400, "El campo ROLEID es obligatorio para actualizar");
-    }
-
-    const collection = mongoose.connection.collection("ZTROLES");
-
-    const exists = await collection.findOne({ ROLEID });
-
-    if (!exists) {
-      return req.error(404, `No se encontró un rol con el ID ${ROLEID}`);
-    }
-
-    const updatedFields = {
-      ...(ROLENAME && { ROLENAME }),
-      ...(DESCRIPTION && { DESCRIPTION }),
-      ...(Array.isArray(PRIVILEGES) && { PRIVILEGES }),
-      ...(Array.isArray(DETAIL_ROW) && { DETAIL_ROW }),
-    };
-
-    if (Object.keys(updatedFields).length === 0) {
-      return req.error(400, "No se proporcionaron campos para actualizar");
-    }
-
-    await collection.e({ ROLEID }, { $set: updatedFields });
-
-    const updatedRole = await collection.findOne({ ROLEID });
-
-    return {
-      message: "Rol actualizado exitosamente",
-      role: updatedRole,
-    };
-  } catch (error) {
-    console.error("Error al actualizar el rol:", error.message);
-    return req.error(500, "Error interno del servidor");
-  }
-}
-
 async function CrudRoles(req) {
   try {
     const action = req.req.query.action;
@@ -1532,8 +1225,203 @@ async function CrudRoles(req) {
           console.error("Error al actualizar el rol:", error.message);
           return req.error(500, "Error interno del servidor");
         } 
+      case "getRoles":
+        try {
+          let result;
+      
+          const pipeline = [
+            {
+              $lookup: {
+                from: "ZTROLES",
+                localField: "ROLEID",
+                foreignField: "ROLEID",
+                as: "ROLE_DETAILS",
+              },
+            },
+            { $unwind: "$ROLE_DETAILS" },
+            { $unwind: "$ROLE_DETAILS.PRIVILEGES" }, // Desestructurar los privilegios para procesarlos individualmente
+            {
+              $lookup: {
+                from: "ZTVALUES",
+                let: { processId: "$ROLE_DETAILS.PRIVILEGES.PROCESSID" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: [{ $concat: ["IdProcess-", "$VALUEID"] }, "$$processId"],
+                      },
+                    },
+                  },
+                  {
+                    $lookup: {
+                      from: "ZTVALUES",
+                      let: { viewId: "$VALUEPAID" },
+                      pipeline: [
+                        {
+                          $match: {
+                            $expr: {
+                              $eq: [
+                                { $concat: ["IdViews-", "$VALUEID"] },
+                                "$$viewId",
+                              ],
+                            },
+                          },
+                        },
+                        {
+                          $lookup: {
+                            from: "ZTVALUES",
+                            let: { appId: "$VALUEPAID" },
+                            pipeline: [
+                              {
+                                $match: {
+                                  $expr: {
+                                    $eq: [
+                                      { $concat: ["IdApplications-", "$VALUEID"] },
+                                      "$$appId",
+                                    ],
+                                  },
+                                },
+                              },
+                            ],
+                            as: "applicationDetails",
+                          },
+                        },
+                        {
+                          $addFields: {
+                            applicationInfo: {
+                              $arrayElemAt: ["$applicationDetails", 0],
+                            },
+                          },
+                        },
+                      ],
+                      as: "viewDetails",
+                    },
+                  },
+                  {
+                    $addFields: {
+                      viewInfo: { $arrayElemAt: ["$viewDetails", 0] },
+                    },
+                  },
+                ],
+                as: "processDetails",
+              },
+            },
+            {
+              $addFields: {
+                processInfo: { $arrayElemAt: ["$processDetails", 0] },
+              },
+            },
+            {
+              $group: {
+                _id: "$ROLEID",
+                ROLEID: { $first: "$ROLEID" },
+                ROLENAME: { $first: "$ROLE_DETAILS.ROLENAME" },
+                DESCRIPTION: { $first: "$ROLE_DETAILS.DESCRIPTION" },
+                PROCESSES: {
+                  $push: {
+                    PROCESSID: "$ROLE_DETAILS.PRIVILEGES.PROCESSID",
+                    PROCESSNAME: "$processInfo.VALUE",
+                    VIEWID: "$processInfo.viewInfo.VALUEID",
+                    VIEWNAME: "$processInfo.viewInfo.VALUE",
+                    APPLICATIONID: "$processInfo.viewInfo.applicationInfo.VALUEID",
+                    APPLICATIONNAME: "$processInfo.viewInfo.applicationInfo.VALUE",
+                    PRIVILEGES: {
+                      $map: {
+                        input: "$ROLE_DETAILS.PRIVILEGES.PRIVILEGEID",
+                        as: "privId",
+                        in: {
+                          PRIVILEGEID: "$$privId",
+                          PRIVILEGENAME: "$$privId", // Asumiendo que el nombre del privilegio es el mismo que su ID
+                        },
+                      },
+                    },
+                  },
+                },
+                DETAIL_ROW: { $first: "$ROLE_DETAILS.DETAIL_ROW" },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                ROLEID: 1,
+                ROLENAME: 1,
+                DESCRIPTION: 1,
+                PROCESSES: 1,
+                DETAIL_ROW: 1,
+              },
+            },
+          ];
+      
+          if (roleid) {
+            pipeline.unshift({ $match: { ROLEID: roleid } });
+          }
+      
+          result = await mongoose.connection
+            .collection("ZTROLES")
+            .aggregate(pipeline)
+            .toArray();
+          return result;
+        } catch (error) {
+          console.error("Error en la agregación de roles:", error.message);
+          throw error;
+        }
+      // Servicio para obtener usuarios con sus roles
+      case "getUserRoles":
+        try {
+          const pipeline = [
+            { $unwind: "$ROLES" },
+            {
+              $lookup: {
+                from: "ZTROLES",
+                localField: "ROLES.ROLEID",
+                foreignField: "ROLEID",
+                as: "roleDetail",
+              },
+            },
+            {
+              $addFields: {
+                roleInfo: {
+                  ROLEID: "$ROLES.ROLEID",
+                  ROLENAME: { $arrayElemAt: ["$roleDetail.ROLENAME", 0] },
+                  DESCRIPTION: { $arrayElemAt: ["$roleDetail.DESCRIPTION", 0] },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: "$_id",
+                userData: { $first: "$$ROOT" },
+                roles: { $push: "$roleInfo" },
+              },
+            },
+            {
+              $replaceRoot: {
+                newRoot: {
+                  $mergeObjects: ["$userData", { ROLES: "$roles" }],
+                },
+              },
+            },
+            {
+              $project: {
+                roleDetail: 0,
+                roleInfo: 0,
+                "userData.ROLES": 0,
+              },
+            },
+          ];
+      
+          const result = await mongoose.connection
+            .collection("ZTUSERS")
+            .aggregate(pipeline)
+            .toArray();
+      
+          return result;
+        } catch (error) {
+          console.error("Error al obtener roles de los usuarios:", error.message);
+          throw error;
+        }
       default:
-      throw new Error("Acción no válida. Las acciones permitidas son: create, update");
+      throw new Error("Acción no válida. Las acciones permitidas son: create, update, getRoles y getUserRoles.");
     }
 
   }catch (error) {
@@ -1548,9 +1436,5 @@ module.exports = {
   CreateValue,
   UpdateValue,
   updateoneuser,
-  GetUserRoles,
-  GetRoles,
-  CreateRole,
-  UpdateRole,
   CrudRoles,
 };
