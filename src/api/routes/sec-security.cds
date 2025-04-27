@@ -17,9 +17,6 @@ service securityRouter @(path: '/api/security') {
     entity entvalues as projection on myval.values;
     entity entroles  as projection on myroles.Roles;
 
-    @Core.Description: 'get-Catalog'
-    @path            : 'catalogs'
-    function catalogs()                      returns array of entvalues;
 
     @Core.Description: 'crud-users'
     @path            : 'crudUsers'
