@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-
 async function CrudUsers(req) {
   try {
     const userid = req?.req?.query?.userid;
@@ -1490,7 +1489,6 @@ async function CrudRoles(req) {
 }
 
 module.exports = {
-  GetLabelsWithValues,
   DeleteRecord,
   CrudUsers,
   CrudValues,
