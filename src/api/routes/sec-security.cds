@@ -20,18 +20,18 @@ service securityRouter @(path: '/api/security') {
 
     @Core.Description: 'crud-users'
     @path            : 'crudUsers'
-    action   crudUsers(users : entusers)     returns array of entusers;
+    action crudUsers(users : entusers)    returns array of entusers;
 
     @Core.Description: 'crud-values'
     @path            : 'crudValues'
-    action   crudValues(values : entvalues) returns array of entvalues;
+    action crudValues(values : entvalues) returns array of entvalues;
 
     @Core.Description: 'crud-roles'
     @path            : 'crudRoles'
-    action   crudRoles(roles : entroles)    returns array of entroles;
+    action crudRoles(roles : entroles)    returns array of entroles;
 
     @Core.Description: 'delete-fisico-logico'
-    @path            : 'delete'
-    action   delete()                        returns array of entusers;
+    @path            : 'deleteAny'
+    action deleteAny()                    returns array of entusers;
 
 };
