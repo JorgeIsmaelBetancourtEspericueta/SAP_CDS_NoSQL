@@ -10,7 +10,7 @@ async function CrudUsers(req) {
     }
 
     switch (action) {
-      case "getUserInfo": // Servicio para obtener usuarios con sus roles, procesos, vistas y aplicaciones
+      case "get": // Servicio para obtener usuarios con sus roles, procesos, vistas y aplicaciones
         try {
           let result;
 
@@ -807,7 +807,7 @@ async function CrudValues(req) {
     }
 
     switch (action) {
-      case "getValue":
+      case "get":
         try {
           const labelid = req?.req?.query?.labelid;
           const valueid = req?.req?.query?.valueid;
@@ -1270,7 +1270,7 @@ async function CrudRoles(req) {
           console.error("Error al actualizar el rol:", error.message);
           return req.error(500, "Error interno del servidor");
         }
-      case "getRoles":
+      case "get":
         try {
           let result;
 
@@ -1421,7 +1421,7 @@ async function CrudRoles(req) {
           throw error;
         }
       // Servicio para obtener usuarios con sus roles
-      case "getUserRoles":
+      case "get":
         try {
           const pipeline = [
             { $unwind: "$ROLES" },
