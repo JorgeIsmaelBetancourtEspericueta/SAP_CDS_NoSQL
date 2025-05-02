@@ -13,11 +13,10 @@ const {
 class InversionsClass extends cds.ApplicationService {
   //Constructor
   async init() {
-
     this.on("crudUsers", async (req) => {
       return CrudUsers(req);
     });
-    
+
     this.on("crudValues", async (req) => {
       return CrudValues(req);
     });
@@ -26,7 +25,7 @@ class InversionsClass extends cds.ApplicationService {
       return CrudRoles(req);
     });
 
-    this.on("delete", async (req) => {
+    this.on("deleteAny", async (req) => {
       // call the service method and return the result to route.
       return DeleteRecord(req);
     });

@@ -595,7 +595,7 @@ async function CrudUsers(req) {
 
           return {
             message: "Usuario creado exitosamente",
-            userId: result.insertedId,
+            user: newUser,
           };
         } catch (error) {
           console.error("Error al crear el usuario:", error.message);
@@ -732,7 +732,7 @@ async function CrudUsers(req) {
         }
       default:
         throw new Error(
-          "Acción no válida. Las acciones permitidas son: getUserInfo, create y update."
+          "Acción no válida. Las acciones permitidas son: get, create y update."
         );
     }
   } catch (error) {
