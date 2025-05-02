@@ -1217,7 +1217,7 @@ async function CrudRoles(req) {
             .findOne({ ROLEID });
 
           if (exists) {
-            return req.error(409, `Ya existe un rol con el ID ${ROLEID}`);
+            throw new Error(`Ya existe un rol con el ID ${ROLEID}`);
           }
 
           const currentDate = new Date();
@@ -1295,160 +1295,172 @@ async function CrudRoles(req) {
         } catch (error) {
           throw new Error(error.message);
         }
-      case "get":
-        try {
-          let result;
-
-          const pipeline = [
-            {
-              $lookup: {
-                from: "ZTROLES",
-                localField: "ROLEID",
-                foreignField: "ROLEID",
-                as: "ROLE_DETAILS",
+        case "get":
+          try {
+            const { roleid } = req?.req?.query; // <-- recibe el parámetro opcional
+        
+            const pipeline = [];
+        
+            // Agrega filtro condicional por ROLEID si se pasa en la query
+            if (roleid) {
+              pipeline.push({ $match: { ROLEID: roleid } });
+            }
+        
+            // Agrega filtro para DETAIL_ROW.ACTIVED = true
+            pipeline.push({ $match: { "DETAIL_ROW.ACTIVED": true } });
+        
+            // Resto del pipeline
+            pipeline.push(
+              {
+                $lookup: {
+                  from: "ZTROLES",
+                  localField: "ROLEID",
+                  foreignField: "ROLEID",
+                  as: "ROLE_DETAILS",
+                },
               },
-            },
-            { $unwind: "$ROLE_DETAILS" },
-            { $unwind: "$ROLE_DETAILS.PRIVILEGES" }, // Desestructurar los privilegios para procesarlos individualmente
-            {
-              $lookup: {
-                from: "ZTVALUES",
-                let: { processId: "$ROLE_DETAILS.PRIVILEGES.PROCESSID" },
-                pipeline: [
-                  {
-                    $match: {
-                      $expr: {
-                        $eq: [
-                          { $concat: ["IdProcess-", "$VALUEID"] },
-                          "$$processId",
-                        ],
+              { $unwind: "$ROLE_DETAILS" },
+              { $unwind: "$ROLE_DETAILS.PRIVILEGES" },
+              {
+                $lookup: {
+                  from: "ZTVALUES",
+                  let: { processId: "$ROLE_DETAILS.PRIVILEGES.PROCESSID" },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $eq: [
+                            { $concat: ["IdProcess-", "$VALUEID"] },
+                            "$$processId",
+                          ],
+                        },
                       },
                     },
-                  },
-                  {
-                    $lookup: {
-                      from: "ZTVALUES",
-                      let: { viewId: "$VALUEPAID" },
-                      pipeline: [
-                        {
-                          $match: {
-                            $expr: {
-                              $eq: [
-                                { $concat: ["IdViews-", "$VALUEID"] },
-                                "$$viewId",
-                              ],
+                    {
+                      $lookup: {
+                        from: "ZTVALUES",
+                        let: { viewId: "$VALUEPAID" },
+                        pipeline: [
+                          {
+                            $match: {
+                              $expr: {
+                                $eq: [
+                                  { $concat: ["IdViews-", "$VALUEID"] },
+                                  "$$viewId",
+                                ],
+                              },
                             },
                           },
-                        },
-                        {
-                          $lookup: {
-                            from: "ZTVALUES",
-                            let: { appId: "$VALUEPAID" },
-                            pipeline: [
-                              {
-                                $match: {
-                                  $expr: {
-                                    $eq: [
-                                      {
-                                        $concat: [
-                                          "IdApplications-",
-                                          "$VALUEID",
-                                        ],
-                                      },
-                                      "$$appId",
-                                    ],
+                          {
+                            $lookup: {
+                              from: "ZTVALUES",
+                              let: { appId: "$VALUEPAID" },
+                              pipeline: [
+                                {
+                                  $match: {
+                                    $expr: {
+                                      $eq: [
+                                        { $concat: ["IdApplications-", "$VALUEID"] },
+                                        "$$appId",
+                                      ],
+                                    },
                                   },
                                 },
-                              },
-                            ],
-                            as: "applicationDetails",
-                          },
-                        },
-                        {
-                          $addFields: {
-                            applicationInfo: {
-                              $arrayElemAt: ["$applicationDetails", 0],
+                              ],
+                              as: "applicationDetails",
                             },
                           },
-                        },
-                      ],
-                      as: "viewDetails",
+                          {
+                            $addFields: {
+                              applicationInfo: {
+                                $arrayElemAt: ["$applicationDetails", 0],
+                              },
+                            },
+                          },
+                        ],
+                        as: "viewDetails",
+                      },
                     },
-                  },
-                  {
-                    $addFields: {
-                      viewInfo: { $arrayElemAt: ["$viewDetails", 0] },
+                    {
+                      $addFields: {
+                        viewInfo: { $arrayElemAt: ["$viewDetails", 0] },
+                      },
                     },
-                  },
-                ],
-                as: "processDetails",
+                  ],
+                  as: "processDetails",
+                },
               },
-            },
-            {
-              $addFields: {
-                processInfo: { $arrayElemAt: ["$processDetails", 0] },
+              {
+                $addFields: {
+                  processInfo: { $arrayElemAt: ["$processDetails", 0] },
+                },
               },
-            },
-            {
-              $group: {
-                _id: "$ROLEID",
-                ROLEID: { $first: "$ROLEID" },
-                ROLENAME: { $first: "$ROLE_DETAILS.ROLENAME" },
-                DESCRIPTION: { $first: "$ROLE_DETAILS.DESCRIPTION" },
-                PROCESSES: {
-                  $push: {
-                    PROCESSID: "$ROLE_DETAILS.PRIVILEGES.PROCESSID",
-                    PROCESSNAME: "$processInfo.VALUE",
-                    VIEWID: "$processInfo.viewInfo.VALUEID",
-                    VIEWNAME: "$processInfo.viewInfo.VALUE",
-                    APPLICATIONID:
-                      "$processInfo.viewInfo.applicationInfo.VALUEID",
-                    APPLICATIONNAME:
-                      "$processInfo.viewInfo.applicationInfo.VALUE",
-                    PRIVILEGES: {
-                      $map: {
-                        input: "$ROLE_DETAILS.PRIVILEGES.PRIVILEGEID",
-                        as: "privId",
-                        in: {
-                          PRIVILEGEID: "$$privId",
-                          PRIVILEGENAME: "$$privId", // Asumiendo que el nombre del privilegio es el mismo que su ID
+              {
+                $group: {
+                  _id: "$ROLEID",
+                  ROLEID: { $first: "$ROLEID" },
+                  ROLENAME: { $first: "$ROLE_DETAILS.ROLENAME" },
+                  DESCRIPTION: { $first: "$ROLE_DETAILS.DESCRIPTION" },
+                  PROCESSES: {
+                    $push: {
+                      PROCESSID: "$ROLE_DETAILS.PRIVILEGES.PROCESSID",
+                      PROCESSNAME: "$processInfo.VALUE",
+                      VIEWID: "$processInfo.viewInfo.VALUEID",
+                      VIEWNAME: "$processInfo.viewInfo.VALUE",
+                      APPLICATIONID:
+                        "$processInfo.viewInfo.applicationInfo.VALUEID",
+                      APPLICATIONNAME:
+                        "$processInfo.viewInfo.applicationInfo.VALUE",
+                      PRIVILEGES: {
+                        $map: {
+                          input: "$ROLE_DETAILS.PRIVILEGES.PRIVILEGEID",
+                          as: "privId",
+                          in: {
+                            PRIVILEGEID: "$$privId",
+                            PRIVILEGENAME: "$$privId",
+                          },
                         },
                       },
                     },
                   },
+                  DETAIL_ROW: { $first: "$ROLE_DETAILS.DETAIL_ROW" },
                 },
-                DETAIL_ROW: { $first: "$ROLE_DETAILS.DETAIL_ROW" },
               },
-            },
-            {
-              $project: {
-                _id: 0,
-                ROLEID: 1,
-                ROLENAME: 1,
-                DESCRIPTION: 1,
-                PROCESSES: 1,
-                DETAIL_ROW: 1,
-              },
-            },
-          ];
+              {
+                $project: {
+                  _id: 0,
+                  ROLEID: 1,
+                  ROLENAME: 1,
+                  DESCRIPTION: 1,
+                  PROCESSES: 1,
+                  DETAIL_ROW: 1,
+                },
+              }
+            );
+        
+            const result = await mongoose.connection
+              .collection("ZTROLES")
+              .aggregate(pipeline)
+              .toArray();
+        
+            return result;
+          } catch (error) {
+            throw new Error(error.message);
+          }
+        
+      // Servicio para obtener usuarios con sus roles
+      case "getUsByRo":
+        try {
 
-          if (roleid) {
-            pipeline.unshift({ $match: { ROLEID: roleid } });
+          const { roleid } = req.req.query;
+
+          if(!roleid){
+            throw new Error("No se proporcinó el ID del usuario")
           }
 
-          result = await mongoose.connection
-            .collection("ZTROLES")
-            .aggregate(pipeline)
-            .toArray();
-          return result;
-        } catch (error) {
-          throw new Error(error.message);
-        }
-      // Servicio para obtener usuarios con sus roles
-      case "get":
-        try {
           const pipeline = [
             { $unwind: "$ROLES" },
+            ...(roleid ? [{ $match: { "ROLES.ROLEID": roleid } }] : []), // filtro dinámico
             {
               $lookup: {
                 from: "ZTROLES",
@@ -1498,6 +1510,7 @@ async function CrudRoles(req) {
         } catch (error) {
           throw new Error(error.message);
         }
+
       default:
         throw new Error(
           "Acción no válida. Las acciones permitidas son: create, update, getRoles y getUserRoles."
