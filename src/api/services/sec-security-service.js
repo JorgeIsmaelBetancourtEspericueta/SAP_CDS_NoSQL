@@ -1,3 +1,4 @@
+const { message } = require("@sap/cds/lib/log/cds-error");
 const mongoose = require("mongoose");
 
 async function CrudUsers(req) {
@@ -482,11 +483,7 @@ async function CrudUsers(req) {
 
           return result;
         } catch (error) {
-          console.error(
-            "Error en la agregación de usuario-rol-proceso:",
-            error.message
-          );
-          throw error;
+          throw new Error(error.message);
         }
       case "create":
         try {
@@ -724,11 +721,8 @@ async function CrudUsers(req) {
           return {
             message: `El usuario '${userid}' fue actualizado correctamente.`,
           };
-        } catch (err) {
-          return {
-            error: true,
-            message: `Ocurrió un error al actualizar el usuario: ${err.message}`,
-          };
+        } catch (error) {
+          throw new Error(error.message);
         }
       default:
         throw new Error(
@@ -737,6 +731,7 @@ async function CrudUsers(req) {
     }
   } catch (error) {
     console.error("Error en CrudUsers:", error.message);
+    throw new Error(error.message);
   }
 }
 
@@ -973,8 +968,8 @@ async function CrudValues(req) {
 
           // Crear el nuevo objeto ZTVALUES
           const newZTValue = {
-            COMPANYID: COMPANYID || null,
-            CEDIID: CEDIID || null,
+            COMPANYID: COMPANYID,
+            CEDIID: CEDIID,
             LABELID: LABELID || "",
             VALUEPAID: VALUEPAID || "",
             VALUEID: VALUEID || "",
@@ -999,11 +994,10 @@ async function CrudValues(req) {
 
           return {
             message: "ZTValue creado exitosamente",
-            ztvalueId: result.insertedId,
+            ztvalueId: newZTValue,
           };
         } catch (error) {
-          console.error("Error al crear el ZTValue:", error.message);
-          throw error;
+          throw new Error(error.message);
         }
       case "update":
         try {
@@ -1143,8 +1137,7 @@ async function CrudValues(req) {
             updatedFields: updateFields,
           };
         } catch (error) {
-          console.error("Error al actualizar el ZTValue:", error.message);
-          throw error;
+          throw new Error(error.message);
         }
       default:
         throw new Error(
@@ -1153,6 +1146,7 @@ async function CrudValues(req) {
     }
   } catch (error) {
     console.error("Error en CrudValues:", error.message);
+    throw new Error(error.message);
   }
 }
 
@@ -1221,8 +1215,7 @@ async function CrudRoles(req) {
           await mongoose.connection.collection("ZTROLES").insertOne(newRole);
           return { message: "Rol creado exitosamente", role: newRole };
         } catch (error) {
-          console.error("Error al crear el rol:", error.message);
-          return req.error(500, "Error interno del servidor");
+          throw new Error(error.message);
         }
       case "update":
         try {
@@ -1252,10 +1245,7 @@ async function CrudRoles(req) {
           };
 
           if (Object.keys(updatedFields).length === 0) {
-            return req.error(
-              400,
-              "No se proporcionaron campos para actualizar"
-            );
+            throw new Error("No se proporcionaron campos para actualizar");
           }
 
           await collection.updateOne({ ROLEID }, { $set: updatedFields });
@@ -1267,8 +1257,7 @@ async function CrudRoles(req) {
             role: updatedRole,
           };
         } catch (error) {
-          console.error("Error al actualizar el rol:", error.message);
-          return req.error(500, "Error interno del servidor");
+          throw new Error(error.message);
         }
       case "get":
         try {
@@ -1417,8 +1406,7 @@ async function CrudRoles(req) {
             .toArray();
           return result;
         } catch (error) {
-          console.error("Error en la agregación de roles:", error.message);
-          throw error;
+          throw new Error(error.message);
         }
       // Servicio para obtener usuarios con sus roles
       case "get":
@@ -1472,11 +1460,7 @@ async function CrudRoles(req) {
 
           return result;
         } catch (error) {
-          console.error(
-            "Error al obtener roles de los usuarios:",
-            error.message
-          );
-          throw error;
+          throw new Error(error.message);
         }
       default:
         throw new Error(
@@ -1484,7 +1468,8 @@ async function CrudRoles(req) {
         );
     }
   } catch (error) {
-    console.error("Error en CrudRoles:", error.message);
+    console.error("Error en CrudValues:", error.message);
+    throw new Error(error.message);
   }
 }
 
