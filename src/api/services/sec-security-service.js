@@ -822,6 +822,17 @@ async function CrudValues(req) {
                     as: "VALUES",
                   },
                 },
+                {
+                  $addFields: {
+                    VALUES: {
+                      $filter: {
+                        input: "$VALUES",
+                        as: "val",
+                        cond: { $eq: ["$$val.DETAIL_ROW.ACTIVED", true] },
+                      },
+                    },
+                  },
+                },
               ])
               .toArray();
           } else if (labelid && !valueid) {
@@ -838,6 +849,17 @@ async function CrudValues(req) {
                     localField: "LABELID",
                     foreignField: "LABELID",
                     as: "VALUES",
+                  },
+                },
+                {
+                  $addFields: {
+                    VALUES: {
+                      $filter: {
+                        input: "$VALUES",
+                        as: "val",
+                        cond: { $eq: ["$$val.DETAIL_ROW.ACTIVED", true] },
+                      },
+                    },
                   },
                 },
               ])
@@ -864,7 +886,12 @@ async function CrudValues(req) {
                       $filter: {
                         input: "$VALUES",
                         as: "val",
-                        cond: { $eq: ["$$val.VALUEID", valueid] },
+                        cond: {
+                          $and: [
+                            { $eq: ["$$val.VALUEID", valueid] },
+                            { $eq: ["$$val.DETAIL_ROW.ACTIVED", true] },
+                          ],
+                        },
                       },
                     },
                   },
@@ -878,9 +905,9 @@ async function CrudValues(req) {
           console.error("Error en la agregación con $lookup:", error.message);
           throw error;
         }
+
       case "create":
         try {
-          // Desestructuración para una aplicación
           const {
             COMPANYID,
             CEDIID,
@@ -901,7 +928,6 @@ async function CrudValues(req) {
 
           const currentDate = new Date();
 
-          // Sección para DETAIL_ROW_REG
           const detailRowReg = [
             {
               CURRENT: false,
@@ -917,7 +943,6 @@ async function CrudValues(req) {
             },
           ];
 
-          // Validaciones
           const validLabels = [
             "IdApplications",
             "IdViews",
@@ -934,6 +959,15 @@ async function CrudValues(req) {
             );
           }
 
+          // Verificar si ya existe un VALUEID en la colección
+          const valueExists = await mongoose.connection
+            .collection("ZTVALUES")
+            .findOne({ VALUEID });
+
+          if (valueExists) {
+            throw new Error(`Ya existe un registro con VALUEID "${VALUEID}".`);
+          }
+
           if (LABELID === "IdApplications" && VALUEPAID) {
             throw new Error(
               "VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre."
@@ -941,11 +975,9 @@ async function CrudValues(req) {
           }
 
           if (LABELID !== "IdApplications") {
-            // Verificar que VALUEPAID esté en el formato esperado y que el ID padre exista
             const labelIndex = validLabels.indexOf(LABELID);
-            const parentLabel = validLabels[labelIndex - 1]; // El padre del LABELID actual
+            const parentLabel = validLabels[labelIndex - 1];
 
-            // Validar el formato de VALUEPAID (sin espacios alrededor del guion)
             const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
             if (!regex.test(VALUEPAID)) {
               throw new Error(
@@ -953,8 +985,7 @@ async function CrudValues(req) {
               );
             }
 
-            // Verificar la existencia del ID padre en la colección
-            const parentId = VALUEPAID.split("-")[1]; // Extraer el ID del registro padre
+            const parentId = VALUEPAID.split("-")[1];
             const parentExists = await mongoose.connection
               .collection("ZTVALUES")
               .findOne({ LABELID: parentLabel, VALUEID: parentId });
@@ -966,10 +997,9 @@ async function CrudValues(req) {
             }
           }
 
-          // Crear el nuevo objeto ZTVALUES
           const newZTValue = {
-            COMPANYID: COMPANYID,
-            CEDIID: CEDIID,
+            COMPANYID,
+            CEDIID,
             LABELID: LABELID || "",
             VALUEPAID: VALUEPAID || "",
             VALUEID: VALUEID || "",
@@ -987,7 +1017,6 @@ async function CrudValues(req) {
             },
           };
 
-          // Inserción del nuevo documento
           const result = await mongoose.connection
             .collection("ZTVALUES")
             .insertOne(newZTValue);
@@ -999,6 +1028,7 @@ async function CrudValues(req) {
         } catch (error) {
           throw new Error(error.message);
         }
+
       case "update":
         try {
           // Obtener VALUEID desde los query parameters
