@@ -103,7 +103,8 @@ async function crudSimulation(req) {
             );
           }
 
-          const apiKey = "9BIPPPBV4TA9MZGE"; // Reemplaza con tu clave real
+          // const apiKey = "9BIPPPBV4TA9MZGE"; // Reemplaza con tu clave real
+          const apiKey = "demo";
           const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
 
           const response = await axios.get(apiUrl);
@@ -227,7 +228,7 @@ async function crudSimulation(req) {
           const simulation = {
             SIMULATION_ID: `SIMULATION_${Date.now()}`,
             STRATEGY_NAME: "Reversión Simple",
-            DATE: new Date(),
+            DATE: new Date().toISOString(),
             SYMBOL: symbol,
             ASSET_TYPE: "STOCK",
             ASSET_NAME: symbol,
