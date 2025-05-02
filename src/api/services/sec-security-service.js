@@ -1253,48 +1253,45 @@ async function CrudRoles(req) {
         } catch (error) {
           throw new Error(error.message);
         }
-      case "update":
-        try {
-          const { ROLEID, ROLENAME, DESCRIPTION, PRIVILEGES, DETAIL_ROW } =
-            req.data.roles;
-
-          if (!ROLEID) {
-            return req.error(
-              400,
-              "El campo ROLEID es obligatorio para actualizar"
-            );
+        case "update":
+          try {
+            const { roleid } = req?.req?.query;
+            const { ROLENAME, DESCRIPTION, PRIVILEGES } = req.data.roles;
+        
+            if (!roleid) {
+              throw new Error("El parámetro ROLEID en query es obligatorio para actualizar");
+            }
+        
+            const collection = mongoose.connection.collection("ZTROLES");
+        
+            const exists = await collection.findOne({ ROLEID: roleid });
+        
+            if (!exists) {
+              return req.error(404, `No se encontró un rol con el ID ${roleid}`);
+            }
+        
+            const updatedFields = {};
+        
+            if (ROLENAME) updatedFields.ROLENAME = ROLENAME;
+            if (DESCRIPTION) updatedFields.DESCRIPTION = DESCRIPTION;
+            if (Array.isArray(PRIVILEGES)) updatedFields.PRIVILEGES = PRIVILEGES;
+        
+            if (Object.keys(updatedFields).length === 0) {
+              throw new Error("No se proporcionaron campos válidos para actualizar");
+            }
+        
+            await collection.updateOne({ ROLEID: roleid }, { $set: updatedFields });
+        
+            const updatedRole = await collection.findOne({ ROLEID: roleid });
+        
+            return {
+              message: "Rol actualizado exitosamente",
+              role: updatedRole,
+            };
+          } catch (error) {
+            throw new Error(error.message);
           }
-
-          const collection = mongoose.connection.collection("ZTROLES");
-
-          const exists = await collection.findOne({ ROLEID });
-
-          if (!exists) {
-            return req.error(404, `No se encontró un rol con el ID ${ROLEID}`);
-          }
-
-          const updatedFields = {
-            ...(ROLENAME && { ROLENAME }),
-            ...(DESCRIPTION && { DESCRIPTION }),
-            ...(Array.isArray(PRIVILEGES) && { PRIVILEGES }),
-            ...(Array.isArray(DETAIL_ROW) && { DETAIL_ROW }),
-          };
-
-          if (Object.keys(updatedFields).length === 0) {
-            throw new Error("No se proporcionaron campos para actualizar");
-          }
-
-          await collection.updateOne({ ROLEID }, { $set: updatedFields });
-
-          const updatedRole = await collection.findOne({ ROLEID });
-
-          return {
-            message: "Rol actualizado exitosamente",
-            role: updatedRole,
-          };
-        } catch (error) {
-          throw new Error(error.message);
-        }
+      
       case "get":
         try {
           const { roleid } = req?.req?.query;
