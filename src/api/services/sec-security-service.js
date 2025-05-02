@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 
 async function CrudUsers(req) {
   try {
-    const userid = req?.req?.query?.userid;
     const action = req.req.query.action;
 
     if (!action) {
@@ -531,6 +530,13 @@ async function CrudUsers(req) {
               REGUSER: reguser,
             },
           ];
+
+          const existente = await mongoose.connection
+            .collection("ZTUSERS")
+            .findOne({ USERID: USERID });
+          if (existente) {
+            throw new Error("El USERID ya existe.");
+          }
 
           // ✅ Verificación de existencia de roles en la colección ZTROLES
           const roleIds = ROLES?.map((role) => role.ROLEID) || [];

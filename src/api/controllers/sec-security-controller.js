@@ -1,5 +1,4 @@
-//Import libraries
-
+// Import libraries
 const cds = require("@sap/cds");
 
 const {
@@ -8,26 +7,41 @@ const {
   CrudValues,
   CrudRoles,
 } = require("../services/sec-security-service");
-//Principal structure controller class
 
+// Principal structure controller class
 class InversionsClass extends cds.ApplicationService {
-  //Constructor
+  // Constructor
   async init() {
     this.on("crudUsers", async (req) => {
-      return CrudUsers(req);
+      try {
+        return await CrudUsers(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudUsers");
+      }
     });
 
     this.on("crudValues", async (req) => {
-      return CrudValues(req);
+      try {
+        return await CrudValues(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudValues");
+      }
     });
 
     this.on("crudRoles", async (req) => {
-      return CrudRoles(req);
+      try {
+        return await CrudRoles(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudRoles");
+      }
     });
 
     this.on("deleteAny", async (req) => {
-      // call the service method and return the result to route.
-      return DeleteRecord(req);
+      try {
+        return await DeleteRecord(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en deleteAny");
+      }
     });
 
     return await super.init();
