@@ -32,8 +32,5 @@
       "db": "src/api/models",
       "srv": "src/api/routes"
     }
-  },
-  "requires": {
-    "impl": "src/api/controllers/inv-inversions-controller.js"
   }
 }

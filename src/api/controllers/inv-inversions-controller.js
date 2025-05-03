@@ -3,8 +3,9 @@
 const cds = require("@sap/cds");
 
 const {
-  crudSimulation
+  crudSimulation, crudStrategies
 } = require("../services/inv-inversions-services");
+
 //Principal structure controller class
 
 class InversionsClass extends cds.ApplicationService {
@@ -12,8 +13,19 @@ class InversionsClass extends cds.ApplicationService {
   async init() {
     //Call method handler the parent constructor
     this.on("crudSimulation", async (req) => {
-      // call the service method and return the result to route.
-      return crudSimulation(req);
+      try {
+        return await crudSimulation(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudSimulation");
+      }
+    });
+
+    this.on("crudStrategies", async (req) => {
+      try {
+        return await crudStrategies(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudStrategies");
+      }
     });
 
     return await super.init();

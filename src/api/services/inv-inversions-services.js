@@ -283,4 +283,65 @@ async function crudSimulation(req) {
   }
 }
 
-module.exports = { crudSimulation };
+const connectToMongoDB = require("../../lib/mongo");
+const Strategy = require("../models/mongoDB/Strategy");
+
+async function crudStrategies(req) {
+  try {
+    const action = req.req.query.action;
+    if (!action) throw new Error("El parámetro 'action' es obligatorio.");
+
+    await connectToMongoDB(); // conecta a Mongo
+
+    switch (action) {
+      case "post":
+        try {
+          const strategyData = req.data?.strategy;
+          const strategyID = strategyData?.ID;
+
+          if (!strategyID) {
+            return req.error(400, "Se requiere un ID.");
+          }
+
+          const existing = await Strategy.findOne({ ID: strategyID });
+          if (existing) {
+            return req.error(409, `Ya existe una estrategia con ID '${strategyID}'.`);
+          }
+
+          const newStrategy = new Strategy({
+            ...strategyData,
+            DETAIL_ROW: {
+              ACTIVED: true,
+              DELETED: false,
+              DETAIL_ROW_REG: [{
+                CURRENT: true,
+                REGDATE: new Date(),
+                REGTIME: new Date(),
+                REGUSER: "FIBARRAC"
+              }]
+            }
+          });
+
+          await newStrategy.save();
+
+          return {
+            message: "Estrategia creada correctamente.",
+            strategy: newStrategy.toObject()
+          };
+        } catch (error) {
+          console.error("Error en postStrategy:", error.message);
+          return req.error(500, `Error al crear estrategia: ${error.message}`);
+        }
+
+      // puedes implementar GET, DELETE igual con Mongoose aquí...
+
+      default:
+        throw new Error(`Acción no soportada: ${action}`);
+    }
+  } catch (error) {
+    console.error("Error en crudStrategies:", error.message);
+    throw error;
+  }
+}
+
+module.exports = { crudSimulation, crudStrategies };
