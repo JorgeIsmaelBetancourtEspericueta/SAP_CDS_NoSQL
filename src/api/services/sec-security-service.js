@@ -20,12 +20,6 @@ async function CrudUsers(req) {
             result = await mongoose.connection
               .collection("ZTUSERS")
               .aggregate([
-                { $match: {
-                    $and: [
-                        { "DETAIL_ROW.DELETED": false },
-                        { "DETAIL_ROW.ACTIVED": true },
-                    ]
-                  } },
                 {
                   $lookup: {
                     from: "ZTROLES",
@@ -256,11 +250,7 @@ async function CrudUsers(req) {
               .collection("ZTUSERS")
               .aggregate([
                 {
-                  $match: { $and: [
-                      { USERID: userid },
-                      { "DETAIL_ROW.DELETED": false },
-                      { "DETAIL_ROW.ACTIVED": true },
-                  ] },
+                  $match: {USERID: userid },
                 },
                 // Aquí va exactamente el mismo pipeline que en el if anterior
                 {
