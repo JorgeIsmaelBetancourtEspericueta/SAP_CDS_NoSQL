@@ -273,7 +273,46 @@ async function crudSimulation(req) {
             `Error al crear la simulación: ${error.message || error}`
           );
         }
+        case "update": 
+        try {
+          const { id } = req?.req?.query || {};
+          const { simulation } = req.data || {};
+      
+          if (!id) {
+            throw new Error("Se debe proporcionar el ID de la simulación a actualizar en query (param 'id').");
+          }
+          if (!simulation) {
+            throw new Error("Se debe proporcionar en el body un objeto 'simulation'.");
+          }
+      
+          const updates = { ...simulation };
+          delete updates.SIMULATION_ID;
+      
+          if (Object.keys(updates).length === 0) {
+            throw new Error("Debe especificar al menos un campo distinto de SIMULATION_ID para actualizar.");
+          }
+      
+          const result = await mongoose.connection
+            .collection("SIMULATION")
+            .findOneAndUpdate(
+              { SIMULATION_ID: id },    
+              { $set: updates },       
+              { returnDocument: "after" }
+            );
+      
 
+          if (!result) {
+            return { message: `No existe simulación con ID ${id}` };
+          }
+      
+          return {
+            message: "Simulación actualizada exitosamente.",
+            simulation: result
+          };
+        } catch (err) {
+          console.error("Error al actualizar simulación:", err.message || err);
+          throw new Error(`Error en UPDATE de simulación: ${err.message || err}`);
+        }
       default:
         throw new Error(`Acción no soportada: ${action}`);
     }
@@ -332,8 +371,54 @@ async function crudStrategies(req) {
           console.error("Error en postStrategy:", error.message);
           return req.error(500, `Error al crear estrategia: ${error.message}`);
         }
-
-      // puedes implementar GET, DELETE igual con Mongoose aquí...
+        case "update":
+          try {
+            const { id } = req?.req?.query || {};
+            const strategyData = req.data?.strategy;
+        
+            if (!id) {
+              return req.error(400, "Se debe proporcionar el ID de la estrategia en query (param 'id').");
+            }
+            if (!strategyData) {
+              return req.error(400, "Se debe proporcionar en el body un objeto 'strategy'.");
+            }
+        
+            const updates = { ...strategyData };
+            delete updates.ID;
+        
+            if (Object.keys(updates).length === 0) {
+              return req.error(400, "Debe especificar al menos un campo distinto de 'ID' para actualizar.");
+            }
+        
+            const existing = await Strategy.findOne({ ID: id });
+            if (!existing) {
+              return req.error(404, `No se encontró estrategia con ID '${id}'.`);
+            }
+        
+            Object.assign(existing, updates);
+        
+            existing.DETAIL_ROW = existing.DETAIL_ROW || {
+              ACTIVED: true,
+              DELETED: false,
+              DETAIL_ROW_REG: []
+            };
+            existing.DETAIL_ROW.DETAIL_ROW_REG.push({
+              CURRENT: true,
+              REGDATE: new Date(),
+              REGTIME: new Date(),
+              REGUSER: "FIBARRAC"
+            });
+        
+            await existing.save();
+            return {
+              message: "Estrategia actualizada correctamente.",
+              strategy: existing.toObject()
+            };
+        
+          } catch (error) {
+            console.error("Error en patchStrategy:", error.message);
+            return req.error(500, `Error al actualizar estrategia: ${error.message}`);
+          }
 
       default:
         throw new Error(`Acción no soportada: ${action}`);

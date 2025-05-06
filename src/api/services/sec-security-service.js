@@ -20,6 +20,12 @@ async function CrudUsers(req) {
             result = await mongoose.connection
               .collection("ZTUSERS")
               .aggregate([
+                { $match: {
+                    $and: [
+                        { "DETAIL_ROW.DELETED": false },
+                        { "DETAIL_ROW.ACTIVED": true },
+                    ]
+                  } },
                 {
                   $lookup: {
                     from: "ZTROLES",
@@ -250,7 +256,11 @@ async function CrudUsers(req) {
               .collection("ZTUSERS")
               .aggregate([
                 {
-                  $match: { USERID: userid },
+                  $match: { $and: [
+                      { USERID: userid },
+                      { "DETAIL_ROW.DELETED": false },
+                      { "DETAIL_ROW.ACTIVED": true },
+                  ] },
                 },
                 // Aquí va exactamente el mismo pipeline que en el if anterior
                 {
@@ -752,13 +762,12 @@ async function DeleteRecord(req) {
     if (!labelid && !userid && !roleid && !valueid) {
       throw new Error("Se debe proporcionar al menos un ID para eliminar");
     }
-
+    console.log("borrado", userid);
     const currentDate = new Date();
 
     // Función para marcar como eliminado según tipo (lógico o físico)
     const deleteFromCollection = async (collection, fieldName, value) => {
       const filter = { [fieldName]: value };
-
       // Campos a modificar según el tipo de eliminación
       const updateFields = {
         "DETAIL_ROW.ACTIVED": false,
