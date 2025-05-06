@@ -818,29 +818,15 @@ async function CrudValues(req) {
           if (!labelid && !valueid) {
             // Caso 1: No hay labelid ni valueid
             result = await mongoose.connection
-              .collection("ZTLABELS")
-              .aggregate([
-                {
-                  $lookup: {
-                    from: "ZTVALUES",
-                    localField: "LABELID",
-                    foreignField: "LABELID",
-                    as: "VALUES",
-                  },
+            .collection("ZTVALUES") // ✅ Cambiado a la colección correcta
+            .aggregate([
+              {
+                $match: {
+                  "DETAIL_ROW.ACTIVED": true, // Filtra los valores activos
                 },
-                {
-                  $addFields: {
-                    VALUES: {
-                      $filter: {
-                        input: "$VALUES",
-                        as: "val",
-                        cond: { $eq: ["$$val.DETAIL_ROW.ACTIVED", true] },
-                      },
-                    },
-                  },
-                },
-              ])
-              .toArray();
+              },
+            ])
+            .toArray();
           } else if (labelid && !valueid) {
             // Caso 2: Solo hay labelid
             result = await mongoose.connection
