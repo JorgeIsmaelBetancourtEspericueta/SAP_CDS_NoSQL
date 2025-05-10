@@ -23,27 +23,26 @@ type StrategyRule : {
 
 // Entidades
 entity Simulation {
-    key SIMULATION_ID      : String;
-        STRATEGY_NAME        : String;
-        DATE                 : DateTime;
-        SYMBOL               : String;
-        ASSET_TYPE           : String;
-        ASSET_NAME           : String;
-        INITIAL_INVESTMENT   : Decimal;
-        PERIOD_DAYS          : Integer;
-        START_DATE           : Date;
-        END_DATE             : Date;
-        RECOMMENDATION       : String;
-        ENTRY_PRICE          : Decimal;
-        EXIT_PRICE           : Decimal;
-        PROFIT               : Decimal;
-        RETURN_PERCENTAGE    : Decimal;
-        SOLD                 : Boolean;
-        SELL_DATE            : Date;
-        TREND                : String;
-        VOLATILITY           : String;
-        URL_DATA             : String;
-        DETAIL_ROW           : array of DetailRow;
+    key idSimulation       : String;
+        idUser             : String;
+        idStrategy         : String;
+        simulationName     : String;
+        symbol             : String;
+        startDate          : Date;
+        endDate            : Date;
+        amount             : Decimal(10,2);
+        specs              : String;
+        result             : Decimal(10,2);
+        percentageReturn   : Decimal(5,2);
+        signals            : array of Signal;
+        DETAIL_ROW         : array of DetailRow;
+}
+
+type Signal {
+    date        : DateTime;
+    type        : String;
+    price       : Decimal(10,2);
+    reasoning   : String;
 }
 
 entity strategies {

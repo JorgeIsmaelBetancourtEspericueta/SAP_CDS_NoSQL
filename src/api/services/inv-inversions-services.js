@@ -93,225 +93,234 @@ async function crudSimulation(req) {
           console.error("Error al eliminar simulación:", error);
           throw new Error("Error al eliminar simulación");
         }
-      case "post": // Crear una nueva simulación usando HISTORICAL_OPTIONS
+      case "post":
         try {
-          const { symbol, initial_investment } = req?.req?.query || {};
+          const { symbol, initial_investment, simulationName } =
+            req?.req?.query || {};
 
-          if (!symbol || !initial_investment) {
+          if (!symbol || !initial_investment || !simulationName) {
             throw new Error(
-              "Se deben proporcionar 'symbol' e 'initial_investment'."
+              "Faltan parámetros requeridos: 'symbol', 'initial_investment', 'simulationName'."
             );
           }
 
-          // const apiKey = "9BIPPPBV4TA9MZGE"; // Reemplaza con tu clave real
-          const apiKey = "demo";
-          const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
+          const idUser = "USER_TEST";
 
-          const response = await axios.get(apiUrl);
-          const optionsData = response.data?.data;
-          if (!optionsData || optionsData.length === 0) {
-            throw new Error("No se encontraron datos de opciones históricas.");
-          }
+          switch (simulationName) {
+            case "ReversionSimple":
+              const apiKey = "demo";
+              const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
+              const response = await axios.get(apiUrl);
+              const optionsData = response.data?.data;
+              const idStrategy = "STRATEGY_001";
 
-          const validOptions = optionsData.filter((option) => {
-            const isCallOption = option.type === "call";
-            const isValidPrice = parseFloat(option.mark) > 0;
-            const expirationDate = new Date(option.expiration);
-            const currentDate = new Date();
-            const isValidDate = expirationDate > currentDate;
-            return isCallOption && isValidPrice && isValidDate;
-          });
+              if (!optionsData || optionsData.length === 0) {
+                throw new Error(
+                  "No se encontraron datos de opciones históricas."
+                );
+              }
 
-          if (validOptions.length === 0) {
-            throw new Error(
-              "No hay suficientes datos válidos para calcular la estrategia."
-            );
-          }
+              const validOptions = optionsData.filter((option) => {
+                return (
+                  option.type === "call" &&
+                  parseFloat(option.mark) > 0 &&
+                  new Date(option.expiration) > new Date()
+                );
+              });
 
-          const markPricesByExpirationDate = {};
-          for (const option of validOptions) {
-            const expirationDate = option.expiration;
-            const price = parseFloat(option.mark);
-            if (!markPricesByExpirationDate[expirationDate])
-              markPricesByExpirationDate[expirationDate] = [];
-            markPricesByExpirationDate[expirationDate].push(price);
-          }
+              if (validOptions.length === 0) {
+                throw new Error(
+                  "No hay suficientes datos válidos para calcular la estrategia."
+                );
+              }
 
-          const expirationDates = Object.keys(
-            markPricesByExpirationDate
-          ).sort();
-          const prices = expirationDates.map((expirationDate) => {
-            const avgPrice =
-              markPricesByExpirationDate[expirationDate].reduce(
-                (sum, p) => sum + p,
-                0
-              ) / markPricesByExpirationDate[expirationDate].length;
-            return { date: expirationDate, close: avgPrice };
-          });
+              const markPricesByExpirationDate = {};
+              for (const option of validOptions) {
+                const { expiration, mark } = option;
+                if (!markPricesByExpirationDate[expiration])
+                  markPricesByExpirationDate[expiration] = [];
+                markPricesByExpirationDate[expiration].push(parseFloat(mark));
+              }
 
-          if (prices.length < 5) {
-            throw new Error(
-              "No hay suficientes datos para calcular la estrategia."
-            );
-          }
+              const expirationDates = Object.keys(
+                markPricesByExpirationDate
+              ).sort();
+              const prices = expirationDates.map((date) => {
+                const values = markPricesByExpirationDate[date];
+                const avgPrice =
+                  values.reduce((sum, p) => sum + p, 0) / values.length;
+                return { date, close: avgPrice };
+              });
 
-          // Usar smaPeriod dinámico dependiendo de cuántos precios haya
-          const smaPeriod = Math.min(5, prices.length);
-          const smaValues = prices.map((_, index, arr) => {
-            if (index < smaPeriod - 1) return null;
-            const sum = arr
-              .slice(index - smaPeriod + 1, index + 1)
-              .reduce((acc, val) => acc + val.close, 0);
-            return sum / smaPeriod;
-          });
+              if (prices.length < 5) {
+                throw new Error(
+                  "No hay suficientes datos para calcular la estrategia."
+                );
+              }
 
-          let entryPrice = null;
-          let exitPrice = null;
-          let entryDate = null;
-          let exitDate = null;
-          let recommendation = "SELL"; // Inicialmente, la recomendación es "SELL"
+              const smaPeriod = Math.min(5, prices.length);
+              const smaValues = prices.map((_, i, arr) => {
+                if (i < smaPeriod - 1) return null;
+                const sum = arr
+                  .slice(i - smaPeriod + 1, i + 1)
+                  .reduce((acc, val) => acc + val.close, 0);
+                return sum / smaPeriod;
+              });
 
-          for (let i = smaPeriod; i < prices.length; i++) {
-            const price = prices[i].close;
-            const sma = smaValues[i];
-            if (!sma) continue;
+              let entryPrice = null,
+                exitPrice = null,
+                entryDate = null,
+                exitDate = null;
+              for (let i = smaPeriod; i < prices.length; i++) {
+                const price = prices[i].close;
+                const sma = smaValues[i];
+                if (!sma) continue;
+                if (!entryPrice && price < sma * 0.95) {
+                  entryPrice = price;
+                  entryDate = prices[i].date;
+                } else if (entryPrice && price > sma * 1.05) {
+                  exitPrice = price;
+                  exitDate = prices[i].date;
+                  break;
+                }
+              }
 
-            // Condición de entrada para compra (BUY)
-            if (!entryPrice && price < sma * 0.95) {
-              entryPrice = price;
-              entryDate = prices[i].date;
-              recommendation = "BUY"; // Si el precio está por debajo del 95% del SMA, recomendamos comprar
-            }
-            // Condición de salida para venta (SELL)
-            else if (entryPrice && price > sma * 1.05) {
-              exitPrice = price;
-              exitDate = prices[i].date;
-              recommendation = "SELL"; // Si el precio supera el 105% del SMA, recomendamos vender
-              break;
-            }
-          }
+              if (!entryPrice || !exitPrice) {
+                throw new Error(
+                  "No se identificaron puntos válidos de entrada/salida."
+                );
+              }
 
-          if (!entryPrice || !exitPrice) {
-            throw new Error(
-              "No se encontraron puntos de entrada y salida según la estrategia."
-            );
-          }
+              // NUEVO CÁLCULO AJUSTADO
+              const investment = parseFloat(initial_investment);
+              const unitsBought = investment / entryPrice;
+              const totalExitValue = unitsBought * exitPrice;
+              const totalProfit = totalExitValue - investment;
+              const returnPercentage = totalProfit / investment;
 
-          const profit = exitPrice - entryPrice;
-          const returnPercentage = profit / entryPrice;
-          const periodDays =
-            (new Date(exitDate) - new Date(entryDate)) / (1000 * 60 * 60 * 24);
+              const recentPrices = prices.slice(-smaPeriod);
+              const priceChanges = recentPrices
+                .map((v, i, arr) => (i === 0 ? 0 : v.close - arr[i - 1].close))
+                .slice(1);
+              const avgChange =
+                priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
+              const volatility =
+                priceChanges.reduce(
+                  (a, b) => a + Math.pow(b - avgChange, 2),
+                  0
+                ) / priceChanges.length;
 
-          const recentPrices = prices.slice(-smaPeriod);
-          const priceChanges = recentPrices
-            .map((val, idx, arr) =>
-              idx === 0 ? 0 : val.close - arr[idx - 1].close
-            )
-            .slice(1);
-          const avgChange =
-            priceChanges.reduce((acc, val) => acc + val, 0) /
-            priceChanges.length;
-          const volatility =
-            priceChanges.reduce(
-              (acc, val) => acc + Math.pow(val - avgChange, 2),
-              0
-            ) / priceChanges.length;
+              const trend =
+                avgChange > 0
+                  ? "bullish"
+                  : avgChange < 0
+                  ? "bearish"
+                  : "sideways";
+              const volatilityLevel =
+                volatility > 2 ? "high" : volatility > 1 ? "medium" : "low";
 
-          let trend = "sideways";
-          if (avgChange > 0) trend = "bullish";
-          else if (avgChange < 0) trend = "bearish";
-
-          let volatilityLevel = "low";
-          if (volatility > 2) volatilityLevel = "high";
-          else if (volatility > 1) volatilityLevel = "medium";
-
-          const simulation = {
-            SIMULATION_ID: `SIMULATION_${Date.now()}`,
-            STRATEGY_NAME: "Reversión Simple",
-            DATE: new Date().toISOString(),
-            SYMBOL: symbol,
-            ASSET_TYPE: "STOCK",
-            ASSET_NAME: symbol,
-            INITIAL_INVESTMENT: initial_investment,
-            PERIOD_DAYS: periodDays,
-            START_DATE: entryDate,
-            END_DATE: exitDate,
-            RECOMMENDATION: recommendation, // La recomendación es dinámica ("BUY" o "SELL")
-            ENTRY_PRICE: entryPrice,
-            EXIT_PRICE: exitPrice,
-            PROFIT: profit,
-            RETURN_PERCENTAGE: returnPercentage,
-            SOLD: true,
-            SELL_DATE: exitDate,
-            TREND: trend,
-            VOLATILITY: volatilityLevel,
-            URL_DATA: apiUrl,
-            DETAIL_ROW: [
-              {
-                ACTIVED: true,
-                DELETED: false,
-                DETAIL_ROW_REG: [
+              const simulation = {
+                idSimulation: `SIM_${Date.now()}`,
+                idUser,
+                idStrategy,
+                simulationName,
+                symbol,
+                startDate: new Date(entryDate),
+                endDate: new Date(exitDate),
+                amount: investment,
+                specs: `Trend: ${trend}, Volatility: ${volatilityLevel}`,
+                result: parseFloat(totalProfit.toFixed(2)),
+                percentageReturn: parseFloat(
+                  (returnPercentage * 100).toFixed(2)
+                ),
+                signals: [
                   {
-                    CURRENT: true,
-                    REGDATE: new Date(),
-                    REGTIME: new Date(),
-                    REGUSER: "FIBARRAC",
+                    date: new Date(entryDate),
+                    type: "BUY",
+                    price: entryPrice,
+                    reasoning: "Precio por debajo del 95% del SMA",
+                  },
+                  {
+                    date: new Date(exitDate),
+                    type: "SELL",
+                    price: exitPrice,
+                    reasoning: "Precio por encima del 105% del SMA",
                   },
                 ],
-              },
-            ],
-          };
+                DETAIL_ROW: [
+                  {
+                    ACTIVED: true,
+                    DELETED: false,
+                    DETAIL_ROW_REG: [
+                      {
+                        CURRENT: true,
+                        REGDATE: new Date(),
+                        REGTIME: new Date(),
+                        REGUSER: "FIBARRAC",
+                      },
+                    ],
+                  },
+                ],
+              };
 
-          await mongoose.connection
-            .collection("SIMULATION")
-            .insertOne(simulation);
-
-          return { message: "Simulación creada exitosamente.", simulation };
+              await mongoose.connection
+                .collection("Simulation")
+                .insertOne(simulation);
+              return { message: "Simulación creada exitosamente.", simulation };
+          }
         } catch (error) {
           console.error("Error detallado:", error.message || error);
           throw new Error(
             `Error al crear la simulación: ${error.message || error}`
           );
         }
-        case "update": 
+
+      case "update":
         try {
           const { id } = req?.req?.query || {};
           const { simulation } = req.data || {};
-      
+
           if (!id) {
-            throw new Error("Se debe proporcionar el ID de la simulación a actualizar en query (param 'id').");
+            throw new Error(
+              "Se debe proporcionar el ID de la simulación a actualizar en query (param 'id')."
+            );
           }
           if (!simulation) {
-            throw new Error("Se debe proporcionar en el body un objeto 'simulation'.");
+            throw new Error(
+              "Se debe proporcionar en el body un objeto 'simulation'."
+            );
           }
-      
+
           const updates = { ...simulation };
           delete updates.SIMULATION_ID;
-      
+
           if (Object.keys(updates).length === 0) {
-            throw new Error("Debe especificar al menos un campo distinto de SIMULATION_ID para actualizar.");
+            throw new Error(
+              "Debe especificar al menos un campo distinto de SIMULATION_ID para actualizar."
+            );
           }
-      
+
           const result = await mongoose.connection
             .collection("SIMULATION")
             .findOneAndUpdate(
-              { SIMULATION_ID: id },    
-              { $set: updates },       
+              { SIMULATION_ID: id },
+              { $set: updates },
               { returnDocument: "after" }
             );
-      
 
           if (!result) {
             return { message: `No existe simulación con ID ${id}` };
           }
-      
+
           return {
             message: "Simulación actualizada exitosamente.",
-            simulation: result
+            simulation: result,
           };
         } catch (err) {
           console.error("Error al actualizar simulación:", err.message || err);
-          throw new Error(`Error en UPDATE de simulación: ${err.message || err}`);
+          throw new Error(
+            `Error en UPDATE de simulación: ${err.message || err}`
+          );
         }
       default:
         throw new Error(`Acción no soportada: ${action}`);
@@ -352,7 +361,7 @@ async function crudStrategies(req) {
             }
 
             return strategy.toObject();
-          } 
+          }
           // Si no tenemos ID, buscamos todas las estrategias activas
           else {
             // Filtramos las estrategias activas
@@ -382,7 +391,10 @@ async function crudStrategies(req) {
 
           const existing = await Strategy.findOne({ ID: strategyID });
           if (existing) {
-            return req.error(409, `Ya existe una estrategia con ID '${strategyID}'.`);
+            return req.error(
+              409,
+              `Ya existe una estrategia con ID '${strategyID}'.`
+            );
           }
 
           const newStrategy = new Strategy({
@@ -390,83 +402,96 @@ async function crudStrategies(req) {
             DETAIL_ROW: {
               ACTIVED: true,
               DELETED: false,
-              DETAIL_ROW_REG: [{
-                CURRENT: true,
-                REGDATE: new Date(),
-                REGTIME: new Date(),
-                REGUSER: "FIBARRAC"
-              }]
-            }
+              DETAIL_ROW_REG: [
+                {
+                  CURRENT: true,
+                  REGDATE: new Date(),
+                  REGTIME: new Date(),
+                  REGUSER: "FIBARRAC",
+                },
+              ],
+            },
           });
 
           await newStrategy.save();
 
           return {
             message: "Estrategia creada correctamente.",
-            strategy: newStrategy.toObject()
+            strategy: newStrategy.toObject(),
           };
         } catch (error) {
           console.error("Error en postStrategy:", error.message);
           return req.error(500, `Error al crear estrategia: ${error.message}`);
         }
-        case "update":
-          try {
-            const { id } = req?.req?.query || {};
-            const strategyData = req.data?.strategy;
-        
-            if (!id) {
-              return req.error(400, "Se debe proporcionar el ID de la estrategia en query (param 'id').");
-            }
-            if (!strategyData) {
-              return req.error(400, "Se debe proporcionar en el body un objeto 'strategy'.");
-            }
-        
-            const updates = { ...strategyData };
-            delete updates.ID;
-        
-            if (Object.keys(updates).length === 0) {
-              return req.error(400, "Debe especificar al menos un campo distinto de 'ID' para actualizar.");
-            }
-        
-            const existing = await Strategy.findOne({ ID: id });
-            if (!existing) {
-              return req.error(404, `No se encontró estrategia con ID '${id}'.`);
-            }
-        
-            Object.assign(existing, updates);
-        
-            existing.DETAIL_ROW = existing.DETAIL_ROW || {
-              ACTIVED: true,
-              DELETED: false,
-              DETAIL_ROW_REG: []
-            };
-            existing.DETAIL_ROW.DETAIL_ROW_REG.push({
-              CURRENT: true,
-              REGDATE: new Date(),
-              REGTIME: new Date(),
-              REGUSER: "FIBARRAC"
-            });
-        
-            await existing.save();
-            return {
-              message: "Estrategia actualizada correctamente.",
-              strategy: existing.toObject()
-            };
-            
+      case "update":
+        try {
+          const { id } = req?.req?.query || {};
+          const strategyData = req.data?.strategy;
 
-            
-          } catch (error) {
-            console.error("Error en patchStrategy:", error.message);
-            return req.error(500, `Error al actualizar estrategia: ${error.message}`);
+          if (!id) {
+            return req.error(
+              400,
+              "Se debe proporcionar el ID de la estrategia en query (param 'id')."
+            );
+          }
+          if (!strategyData) {
+            return req.error(
+              400,
+              "Se debe proporcionar en el body un objeto 'strategy'."
+            );
           }
 
+          const updates = { ...strategyData };
+          delete updates.ID;
 
-            case "delete":
+          if (Object.keys(updates).length === 0) {
+            return req.error(
+              400,
+              "Debe especificar al menos un campo distinto de 'ID' para actualizar."
+            );
+          }
+
+          const existing = await Strategy.findOne({ ID: id });
+          if (!existing) {
+            return req.error(404, `No se encontró estrategia con ID '${id}'.`);
+          }
+
+          Object.assign(existing, updates);
+
+          existing.DETAIL_ROW = existing.DETAIL_ROW || {
+            ACTIVED: true,
+            DELETED: false,
+            DETAIL_ROW_REG: [],
+          };
+          existing.DETAIL_ROW.DETAIL_ROW_REG.push({
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: "FIBARRAC",
+          });
+
+          await existing.save();
+          return {
+            message: "Estrategia actualizada correctamente.",
+            strategy: existing.toObject(),
+          };
+        } catch (error) {
+          console.error("Error en patchStrategy:", error.message);
+          return req.error(
+            500,
+            `Error al actualizar estrategia: ${error.message}`
+          );
+        }
+
+      case "delete":
         try {
           const { id, borrado } = req?.req?.query || {};
 
           if (!id) {
-            return req.error(400, "Se debe proporcionar el ID de la estrategia en query (param 'id').");
+            return req.error(
+              400,
+              "Se debe proporcionar el ID de la estrategia en query (param 'id')."
+            );
           }
 
           const strategy = await Strategy.findOne({ ID: id });
@@ -479,7 +504,7 @@ async function crudStrategies(req) {
           strategy.DETAIL_ROW = strategy.DETAIL_ROW || {
             ACTIVED: true,
             DELETED: false,
-            DETAIL_ROW_REG: []
+            DETAIL_ROW_REG: [],
           };
 
           // Marcar eliminación según el tipo
@@ -488,7 +513,7 @@ async function crudStrategies(req) {
             strategy.DETAIL_ROW.ACTIVED = false;
             strategy.DETAIL_ROW.DELETED = true;
           } else {
-            // Borrado lógico 
+            // Borrado lógico
             strategy.DETAIL_ROW.ACTIVED = false;
             strategy.DETAIL_ROW.DELETED = false;
           }
@@ -498,21 +523,24 @@ async function crudStrategies(req) {
             CURRENT: true,
             REGDATE: new Date(),
             REGTIME: new Date(),
-            REGUSER: "FIBARRAC"
+            REGUSER: "FIBARRAC",
           });
 
           await strategy.save();
 
           return {
-            message: `Estrategia con ID '${id}' marcada como eliminada ${borrado === "fisic" ? "físicamente" : "lógicamente"}.`,
-            strategy: strategy.toObject()
+            message: `Estrategia con ID '${id}' marcada como eliminada ${
+              borrado === "fisic" ? "físicamente" : "lógicamente"
+            }.`,
+            strategy: strategy.toObject(),
           };
-
         } catch (error) {
           console.error("Error en deleteStrategy:", error.message);
-          return req.error(500, `Error al eliminar estrategia: ${error.message}`);
+          return req.error(
+            500,
+            `Error al eliminar estrategia: ${error.message}`
+          );
         }
-
 
       default:
         throw new Error(`Acción no soportada: ${action}`);
