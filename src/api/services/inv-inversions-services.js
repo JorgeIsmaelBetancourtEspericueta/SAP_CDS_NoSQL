@@ -452,11 +452,67 @@ async function crudStrategies(req) {
               message: "Estrategia actualizada correctamente.",
               strategy: existing.toObject()
             };
-        
+            
+
+            
           } catch (error) {
             console.error("Error en patchStrategy:", error.message);
             return req.error(500, `Error al actualizar estrategia: ${error.message}`);
           }
+
+
+            case "delete":
+        try {
+          const { id, borrado } = req?.req?.query || {};
+
+          if (!id) {
+            return req.error(400, "Se debe proporcionar el ID de la estrategia en query (param 'id').");
+          }
+
+          const strategy = await Strategy.findOne({ ID: id });
+
+          if (!strategy) {
+            return req.error(404, `No se encontró estrategia con ID '${id}'.`);
+          }
+
+          // Estructura base de DETAIL_ROW si no existe
+          strategy.DETAIL_ROW = strategy.DETAIL_ROW || {
+            ACTIVED: true,
+            DELETED: false,
+            DETAIL_ROW_REG: []
+          };
+
+          // Marcar eliminación según el tipo
+          if (borrado === "fisic") {
+            // Borrado físico
+            strategy.DETAIL_ROW.ACTIVED = false;
+            strategy.DETAIL_ROW.DELETED = true;
+          } else {
+            // Borrado lógico 
+            strategy.DETAIL_ROW.ACTIVED = false;
+            strategy.DETAIL_ROW.DELETED = false;
+          }
+
+          // Registrar cambio
+          strategy.DETAIL_ROW.DETAIL_ROW_REG.push({
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: "FIBARRAC"
+          });
+
+          await strategy.save();
+
+          return {
+            message: `Estrategia con ID '${id}' marcada como eliminada ${borrado === "fisic" ? "físicamente" : "lógicamente"}.`,
+            strategy: strategy.toObject()
+          };
+
+        } catch (error) {
+          console.error("Error en deleteStrategy:", error.message);
+          return req.error(500, `Error al eliminar estrategia: ${error.message}`);
+        }
+
 
       default:
         throw new Error(`Acción no soportada: ${action}`);
