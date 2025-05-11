@@ -3,7 +3,7 @@
 const cds = require("@sap/cds");
 
 const {
-  crudSimulation, crudStrategies
+  crudSimulation, crudStrategies, company
 } = require("../services/inv-inversions-services");
 
 //Principal structure controller class
@@ -28,6 +28,13 @@ class InversionsClass extends cds.ApplicationService {
       }
     });
 
+    this.on("company", async (req) => {
+      try {
+        return await company(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en company");
+      }
+    });
     return await super.init();
   }
 }

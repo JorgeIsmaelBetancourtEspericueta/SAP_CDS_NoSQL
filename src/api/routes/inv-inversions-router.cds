@@ -16,6 +16,7 @@ service PricesHistoryRouter @(path: '/api/inv') {
     //entity priceshistory as projection on myph.priceshistory;
     entity entstrategies    as projection on myinv.strategies;
     entity entsimulation as projection on myinv.Simulation;
+    entity entcompany as projection on myinv.company;
 
     // 5. Define the route for API Get All Prices History
     // Important: Don't forget that function name must be the same as the path
@@ -29,4 +30,8 @@ service PricesHistoryRouter @(path: '/api/inv') {
     @Core.Description: 'crud-strategies'
     @path            : 'crudStrategies'
     action crudStrategies(strategy : entstrategies) returns array of entstrategies;
+
+    //GET para company
+    @path            : 'company'
+    action company(company : entcompany) returns array of entcompany;
 };

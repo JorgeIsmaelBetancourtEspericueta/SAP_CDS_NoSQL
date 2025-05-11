@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "express": "^4",
     "ioredis": "^5.6.0",
+    "mongodb": "^6.16.0",
     "mongoose": "^8.13.0",
     "redis": "^4.7.0"
   },

@@ -551,4 +551,20 @@ async function crudStrategies(req) {
   }
 }
 
-module.exports = { crudSimulation, crudStrategies };
+async function company(req){
+  const Company = require("../models/mongoDB/company.js");
+  try {
+    // Buscar todas las empresas activas
+   const companies = await Company.find({});
+    return companies.map((c) => c.toObject());
+  } catch (error) {
+    console.error("Error en getCompany:", error.message);
+    return req.error(
+      500,
+      `Error al obtener empresa(s): ${error.message}`
+    );
+  }
+
+}
+
+module.exports = { crudSimulation, crudStrategies, company };
