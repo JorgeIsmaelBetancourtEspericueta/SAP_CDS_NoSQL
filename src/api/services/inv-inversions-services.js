@@ -108,17 +108,36 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "demo";
+              const apiKey = "NU1IF336TN4IBMS5";
               const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data?.data;
-              const idStrategy = "STRATEGY_001";
 
               if (!optionsData || optionsData.length === 0) {
                 throw new Error(
                   "No se encontraron datos de opciones históricas."
                 );
               }
+
+              // 🆕 Guardar datos en ZTPRICESHISTORY si no existen
+              const priceHistoryCollection =
+                mongoose.connection.collection("ZTPRICESHISTORY");
+              const existing = await priceHistoryCollection.findOne({ symbol });
+
+              if (!existing) {
+                await priceHistoryCollection.insertOne({
+                  symbol,
+                  source: "AlphaVantage",
+                  data: optionsData,
+                  lastUpdate: new Date(),
+                });
+              } else {
+                console.log(
+                  `Datos ya existentes para el símbolo ${symbol}. No se duplican.`
+                );
+              }
+
+              const idStrategy = "STRATEGY_001";
 
               const validOptions = optionsData.filter((option) => {
                 return (
@@ -191,7 +210,6 @@ async function crudSimulation(req) {
                 );
               }
 
-              // NUEVO CÁLCULO AJUSTADO
               const investment = parseFloat(initial_investment);
               const unitsBought = investment / entryPrice;
               const totalExitValue = unitsBought * exitPrice;
@@ -264,8 +282,9 @@ async function crudSimulation(req) {
               };
 
               await mongoose.connection
-                .collection("Simulation")
+                .collection("SIMULATION")
                 .insertOne(simulation);
+
               return { message: "Simulación creada exitosamente.", simulation };
           }
         } catch (error) {
@@ -278,43 +297,49 @@ async function crudSimulation(req) {
       case "update":
         try {
           const { id } = req?.req?.query || {};
-          const { simulation } = req.data || {};
+          const simulation = req?.data?.simulation;
 
           if (!id) {
             throw new Error(
               "Se debe proporcionar el ID de la simulación a actualizar en query (param 'id')."
             );
           }
-          if (!simulation) {
-            throw new Error(
-              "Se debe proporcionar en el body un objeto 'simulation'."
-            );
-          }
 
-          const updates = { ...simulation };
-          delete updates.SIMULATION_ID;
-
-          if (Object.keys(updates).length === 0) {
+          if (!simulation?.simulationName) {
             throw new Error(
-              "Debe especificar al menos un campo distinto de SIMULATION_ID para actualizar."
+              "Se debe proporcionar un nuevo nombre para la simulación en 'simulation.simulationName'."
             );
           }
 
           const result = await mongoose.connection
             .collection("SIMULATION")
             .findOneAndUpdate(
-              { SIMULATION_ID: id },
-              { $set: updates },
-              { returnDocument: "after" }
+              { idSimulation: id },
+              {
+                $set: {
+                  simulationName: simulation.simulationName,
+                },
+              },
+              {
+                returnDocument: "after", // o "after" si estás usando MongoDB v4.2+
+              }
             );
 
+          console.log(result, result.value);
+          // Si no se encontró documento
           if (!result) {
-            return { message: `No existe simulación con ID ${id}` };
+            // return plano, sin anidar para evitar que lo envuelvan doblemente
+            return {
+              "@odata.context": "$metadata#entsimulation",
+              message: `No existe simulación con ID ${id}`,
+            };
           }
 
+          // Solo regresa una vez la estructura deseada, sin value adicional
           return {
-            message: "Simulación actualizada exitosamente.",
-            simulation: result,
+            "@odata.context": "$metadata#entsimulation",
+            message: "Nombre de simulación actualizado exitosamente.",
+            simulation: result.value,
           };
         } catch (err) {
           console.error("Error al actualizar simulación:", err.message || err);
@@ -322,6 +347,7 @@ async function crudSimulation(req) {
             `Error en UPDATE de simulación: ${err.message || err}`
           );
         }
+
       default:
         throw new Error(`Acción no soportada: ${action}`);
     }
