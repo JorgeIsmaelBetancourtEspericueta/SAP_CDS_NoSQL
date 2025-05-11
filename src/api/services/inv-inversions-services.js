@@ -108,17 +108,36 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "demo";
+              const apiKey = "NU1IF336TN4IBMS5";
               const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data?.data;
-              const idStrategy = "STRATEGY_001";
 
               if (!optionsData || optionsData.length === 0) {
                 throw new Error(
                   "No se encontraron datos de opciones históricas."
                 );
               }
+
+              // 🆕 Guardar datos en ZTPRICESHISTORY si no existen
+              const priceHistoryCollection =
+                mongoose.connection.collection("ZTPRICESHISTORY");
+              const existing = await priceHistoryCollection.findOne({ symbol });
+
+              if (!existing) {
+                await priceHistoryCollection.insertOne({
+                  symbol,
+                  source: "AlphaVantage",
+                  data: optionsData,
+                  lastUpdate: new Date(),
+                });
+              } else {
+                console.log(
+                  `Datos ya existentes para el símbolo ${symbol}. No se duplican.`
+                );
+              }
+
+              const idStrategy = "STRATEGY_001";
 
               const validOptions = optionsData.filter((option) => {
                 return (
@@ -191,7 +210,6 @@ async function crudSimulation(req) {
                 );
               }
 
-              // NUEVO CÁLCULO AJUSTADO
               const investment = parseFloat(initial_investment);
               const unitsBought = investment / entryPrice;
               const totalExitValue = unitsBought * exitPrice;
@@ -266,6 +284,7 @@ async function crudSimulation(req) {
               await mongoose.connection
                 .collection("SIMULATION")
                 .insertOne(simulation);
+
               return { message: "Simulación creada exitosamente.", simulation };
           }
         } catch (error) {
@@ -306,7 +325,7 @@ async function crudSimulation(req) {
               }
             );
 
-          console.log(result, result.value)
+          console.log(result, result.value);
           // Si no se encontró documento
           if (!result) {
             // return plano, sin anidar para evitar que lo envuelvan doblemente
