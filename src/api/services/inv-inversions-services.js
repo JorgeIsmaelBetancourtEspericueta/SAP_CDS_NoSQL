@@ -358,7 +358,6 @@ async function crudSimulation(req) {
 }
 
 const connectToMongoDB = require("../../lib/mongo");
-const Strategy = require("../models/mongoDB/strategy");
 
 async function crudStrategies(req) {
   try {
@@ -366,45 +365,10 @@ async function crudStrategies(req) {
     if (!action) throw new Error("El parámetro 'action' es obligatorio.");
 
     await connectToMongoDB(); // conecta a Mongo
+//get start
 
     switch (action) {
-      case "get":
-        try {
-          const { id } = req?.req?.query || {};
-          //  Si tenemos un ID, buscamos la estrategia por ID
-          if (id) {
-            const strategy = await Strategy.findOne({
-              ID: id,
-              "DETAIL_ROW.ACTIVED": true,
-              "DETAIL_ROW.DELETED": false,
-            });
-
-            if (!strategy) {
-              return req.error(
-                404,
-                `No se encontró estrategia activa con ID '${id}'.`
-              );
-            }
-
-            return strategy.toObject();
-          }
-          // Si no tenemos ID, buscamos todas las estrategias activas
-          else {
-            // Filtramos las estrategias activas
-            const strategies = await Strategy.find({
-              "DETAIL_ROW.ACTIVED": true,
-              "DETAIL_ROW.DELETED": false,
-            });
-
-            return strategies.map((s) => s.toObject());
-          }
-        } catch (error) {
-          console.error("Error en getStrategy:", error.message);
-          return req.error(
-            500,
-            `Error al obtener estrategia(s): ${error.message}`
-          );
-        }
+      
 
       case "post":
         try {
@@ -577,6 +541,10 @@ async function crudStrategies(req) {
   }
 }
 
+
+//limit
+
+
 async function company(req){
   const Company = require("../models/mongoDB/company.js");
   try {
@@ -593,4 +561,32 @@ async function company(req){
 
 }
 
-module.exports = { crudSimulation, crudStrategies, company };
+
+//get strategy
+ async function strategy(req) {
+  const Strategy = require("../models/mongoDB/Strategy.js");
+
+  try {
+    // Buscar todas las estrategias activas y no eliminadas
+    const strategies = await Strategy.find({
+      "DETAIL_ROW.ACTIVED": true,
+      "DETAIL_ROW.DELETED": false,
+    });
+
+    // Si no se encuentran estrategias, enviar un error 404
+    if (strategies.length === 0) {
+      return req.error(404, 'No se encontraron estrategias activas y no eliminadas.');
+    }
+
+    // Si hay estrategias, devolverlas en formato objeto
+    return strategies.map((s) => s.toObject());
+  } catch (error) {
+    console.error("Error en getStrategy:", error.message);
+    return req.error(
+      500,`Error al obtener estrategias: ${error.message}`
+    );
+  }
+} 
+
+
+module.exports = { crudSimulation, crudStrategies, company, strategy };
