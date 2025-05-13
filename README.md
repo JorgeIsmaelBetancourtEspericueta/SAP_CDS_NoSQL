@@ -23,3 +23,44 @@ File or Folder | Purpose
 ## Learn More
 
 Learn more at https://cap.cloud.sap/docs/get-started/.
+
+```
+RESTfulSapCdsNoSQL
+├─ company.md
+├─ eslint.config.mjs
+├─ package-lock.json
+├─ package.json
+├─ README.md
+├─ server.js
+└─ src
+   ├─ api
+   │  ├─ controllers
+   │  │  ├─ inv-inversions-controller.js
+   │  │  └─ sec-security-controller.js
+   │  ├─ models
+   │  │  ├─ cedis.cds
+   │  │  ├─ data
+   │  │  │  ├─ inv-priceshistory.csv
+   │  │  │  └─ inv-strategies.csv
+   │  │  ├─ inv-inversions.cds
+   │  │  ├─ mongoDB
+   │  │  │  ├─ company.js
+   │  │  │  ├─ fetchEmpresas.js
+   │  │  │  ├─ Strategy.js
+   │  │  │  └─ ztpricehistory.js
+   │  │  ├─ sec-roles.cds
+   │  │  ├─ sec-users.cds
+   │  │  └─ sec-values.cds
+   │  ├─ routes
+   │  │  ├─ inv-inversions-router.cds
+   │  │  └─ sec-security.cds
+   │  └─ services
+   │     ├─ inv-inversions-services.js
+   │     └─ sec-security-service.js
+   ├─ config
+   │  ├─ connectToMongoDB.js
+   │  └─ dotenvXconfig.js
+   └─ lib
+      └─ mongo.js
+
+```
