@@ -54,9 +54,17 @@ async function crudSimulation(req) {
             );
           }
 
-          const filter = { SIMULATION_ID: id };
+          const filter = { idSimulation: id };
 
           if (borrado === "fisic") {
+
+            const existing = await mongoose.connection
+              .collection("SIMULATION")
+              .findOne(filter);
+            console.log("🔍 Documento encontrado:", existing);
+            if (!existing) {
+              throw new Error(`No existe simulación con idSimulation=${id}`);
+            }
             // Eliminación física
             const updateFields = {
               "DETAIL_ROW.$[].ACTIVED": false,
@@ -66,7 +74,7 @@ async function crudSimulation(req) {
             const result = await mongoose.connection
               .collection("SIMULATION")
               .updateOne(filter, { $set: updateFields });
-
+               console.log("🔍 [DEBUG] Resultado de updateOne:", result);
             if (result.modifiedCount === 0) {
               throw new Error("No se pudo marcar como eliminada la simulación");
             }
