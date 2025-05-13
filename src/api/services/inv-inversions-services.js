@@ -10,28 +10,32 @@ async function crudSimulation(req) {
     }
 
     switch (action) {
-      case "get": // Obtener los registros
+      case "get": 
         try {
           let result;
+          const simulationId = req?.req?.query?.idSimulation;
           const strategie = req?.req?.query?.strategie;
           const strategieid = req?.req?.query?.id;
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
-          if (strategie) {
-            // Buscar simulaciones por nombre de estrategia
+          if (simulationId) {          
+            result = await mongoose.connection
+            
+              .collection("SIMULATION")
+              .find({ ...baseFilter, idSimulation: simulationId })
+              .toArray();
+          } else if (strategie) {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find({ ...baseFilter, STRATEGY_NAME: strategie })
               .toArray();
           } else if (strategieid) {
-            // Buscar simulaciones por ID de estrategia
             result = await mongoose.connection
               .collection("SIMULATION")
               .find({ ...baseFilter, SIMULATION_ID: strategieid })
               .toArray();
           } else {
-            // Obtener todas las simulaciones activas
             result = await mongoose.connection
               .collection("SIMULATION")
               .find(baseFilter)
@@ -44,7 +48,7 @@ async function crudSimulation(req) {
           throw new Error("Error al obtener simulaciones");
         }
 
-      case "delete": // Eliminar una simulación
+      case "delete": 
         try {
           const { id, borrado } = req?.req?.query || {};
 
