@@ -3,13 +3,12 @@ const axios = require("axios");
 
 async function indicators(req) {
   try {
-    const { symbol, indicator, interval, month} =
-            req?.req?.query || {};
-          if (!symbol || !indicator || !interval) {
-            throw new Error(
-              "Faltan parámetros requeridos: 'symbol', 'indicator', 'interval'."
-            );
-          }
+    const { symbol, indicator, interval, month } = req?.req?.query || {};
+    if (!symbol || !indicator || !interval) {
+      throw new Error(
+        "Faltan parámetros requeridos: 'symbol', 'indicator', 'interval'."
+      );
+    }
     // Conectar a la base de datos para buscar si el indicador ya existe
     const existingIndicator = await mongoose.connection
       .collection("INDICATORS")
@@ -21,7 +20,14 @@ async function indicators(req) {
         indicator: existingIndicator,
       };
     }
-    const Ainterval = interval === "1d" ? "daily" : interval === "1w" ? "weekly" : interval === "1m" ? "monthly" : interval;
+    const Ainterval =
+      interval === "1d"
+        ? "daily"
+        : interval === "1w"
+        ? "weekly"
+        : interval === "1m"
+        ? "monthly"
+        : interval;
     // Si no existe, obtenemos los datos de la API de Alpha Vantage
     const apiKey = "NB6JDC9T7TRK4KM8";
     const apiUrl = `https://www.alphavantage.co/query?function=${indicator}&symbol=${symbol}&interval=${Ainterval}&time_period=20&series_type=close&apikey=${apiKey}`;
@@ -29,23 +35,33 @@ async function indicators(req) {
     const response = await axios.get(apiUrl);
 
     // Verificamos si la API devolvió datos válidos
-    if (!response.data || response.data["Note"] || response.data["Error Message"]) {
+    if (
+      !response.data ||
+      response.data["Note"] ||
+      response.data["Error Message"]
+    ) {
       throw new Error(
-        response.data["Note"] || response.data["Error Message"] || "Error al obtener datos de la API."
+        response.data["Note"] ||
+          response.data["Error Message"] ||
+          "Error al obtener datos de la API."
       );
     }
 
     // Procesar los datos de la API
     const indicatorData = response.data["Technical Analysis: SMA"];
     if (!indicatorData) {
-      throw new Error("No se encontraron datos técnicos en la respuesta de la API.");
+      throw new Error(
+        "No se encontraron datos técnicos en la respuesta de la API."
+      );
     }
 
     // Damos formato a los datos para ingresar el array de fechas y valores
-    const formattedData = Object.entries(indicatorData).map(([date, values]) => ({
-      DATE: date,
-      VALUE: values["SMA"],
-    }));
+    const formattedData = Object.entries(indicatorData).map(
+      ([date, values]) => ({
+        DATE: date,
+        VALUE: values["SMA"],
+      })
+    );
 
     const newIndicator = {
       SYMBOL: symbol,
@@ -173,17 +189,27 @@ async function crudSimulation(req) {
         }
       case "post":
         try {
-          const { symbol, initial_investment, simulationName } =
-            req?.req?.query || {};
-          if (!symbol || !initial_investment || !simulationName) {
+          const {
+            symbol,
+            initial_investment,
+            simulationName,
+            startDate,
+            endDate,
+          } = req?.req?.query || {};
+
+          if (
+            !symbol ||
+            !initial_investment ||
+            !simulationName ||
+            !startDate ||
+            !endDate
+          ) {
             throw new Error(
-              "Faltan parámetros requeridos: 'symbol', 'initial_investment', 'simulationName'."
+              "Faltan parámetros requeridos: 'symbol', 'initial_investment', 'simulationName', 'startDate', 'endDate'."
             );
           }
 
-          const idUser = "USER_TEST"; // Puedes personalizar esto según el usuario actual
-
-          // Definir el id de la estrategia (puedes cambiarlo si es necesario)
+          const idUser = "USER_TEST";
           const idStrategy = "STRATEGY_001";
 
           switch (simulationName) {
@@ -191,7 +217,6 @@ async function crudSimulation(req) {
               const apiKey = "NU1IF336TN4IBMS5";
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
-
               const optionsData = response.data["Time Series (Daily)"];
 
               if (!optionsData || Object.keys(optionsData).length === 0) {
@@ -200,24 +225,23 @@ async function crudSimulation(req) {
                 );
               }
 
-              // Organizar los precios por fecha
-              const prices = Object.keys(optionsData).map((date) => {
-                const { "4. close": close } = optionsData[date];
-                return { date, close: parseFloat(close) };
-              });
+              // Convertir y filtrar precios por fecha
+              const filteredPrices = Object.keys(optionsData)
+                .filter((date) => date >= startDate && date <= endDate)
+                .map((date) => ({
+                  date,
+                  close: parseFloat(optionsData[date]["4. close"]),
+                }))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-              const sortedPrices = prices.sort(
-                (a, b) => new Date(b.date) - new Date(a.date)
-              );
-
-              if (sortedPrices.length < 5) {
+              if (filteredPrices.length < 5) {
                 throw new Error(
                   "No hay suficientes datos para calcular la estrategia."
                 );
               }
 
-              const smaPeriod = Math.min(5, sortedPrices.length);
-              const smaValues = sortedPrices.map((_, i, arr) => {
+              const smaPeriod = 5;
+              const smaValues = filteredPrices.map((_, i, arr) => {
                 if (i < smaPeriod - 1) return null;
                 const sum = arr
                   .slice(i - smaPeriod + 1, i + 1)
@@ -231,26 +255,25 @@ async function crudSimulation(req) {
                 exitDate = null;
               const signals = [];
 
-              // Identificar las señales de compra y venta
-              for (let i = smaPeriod; i < sortedPrices.length; i++) {
-                const price = sortedPrices[i].close;
+              for (let i = smaPeriod; i < filteredPrices.length; i++) {
+                const price = filteredPrices[i].close;
                 const sma = smaValues[i];
                 if (!sma) continue;
 
                 if (!entryPrice && price < sma * 0.95) {
                   entryPrice = price;
-                  entryDate = sortedPrices[i].date;
+                  entryDate = filteredPrices[i].date;
                   signals.push({
-                    date: new Date(entryDate),
+                    date: entryDate,
                     type: "BUY",
                     price: entryPrice,
                     reasoning: "Precio por debajo del 95% del SMA",
                   });
                 } else if (entryPrice && price > sma * 1.05) {
                   exitPrice = price;
-                  exitDate = sortedPrices[i].date;
+                  exitDate = filteredPrices[i].date;
                   signals.push({
-                    date: new Date(exitDate),
+                    date: exitDate,
                     type: "SELL",
                     price: exitPrice,
                     reasoning: "Precio por encima del 105% del SMA",
@@ -261,33 +284,31 @@ async function crudSimulation(req) {
 
               if (!entryPrice || !exitPrice) {
                 throw new Error(
-                  "No se identificaron puntos válidos de entrada/salida."
+                  `No se identificaron puntos válidos de entrada/salida entre ${startDate} y ${endDate}. Prueba con un rango más amplio o diferente símbolo.`
                 );
               }
 
-              // Cálculo de resultados
               const investment = parseFloat(initial_investment);
               const unitsBought = investment / entryPrice;
               const totalExitValue = unitsBought * exitPrice;
               const totalProfit = totalExitValue - investment;
               const returnPercentage = totalProfit / investment;
 
-              // Crear la simulación con la estructura requerida
               const simulation = {
                 idSimulation: `SIM_${Date.now()}`,
                 idUser,
                 idStrategy,
                 simulationName,
                 symbol,
-                startDate: new Date(exitDate),
-                endDate: new Date(entryDate),
+                startDate,
+                endDate,
                 amount: investment,
-                specs: "Trend: bearish, Volatility: high", // Puedes ajustar esta descripción según el análisis
+                specs: "Trend: bearish, Volatility: high",
                 result: parseFloat(totalProfit.toFixed(2)),
                 percentageReturn: parseFloat(
                   (returnPercentage * 100).toFixed(2)
                 ),
-                signals, // Se incluyen las señales de compra y venta
+                signals,
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
@@ -297,17 +318,32 @@ async function crudSimulation(req) {
                         CURRENT: true,
                         REGDATE: new Date(),
                         REGTIME: new Date(),
-                        REGUSER: "FIBARRAC", // Asegúrate de usar el nombre del usuario correspondiente
+                        REGUSER: "FIBARRAC",
                       },
                     ],
                   },
                 ],
               };
 
-              // Insertar la simulación en la base de datos
+              // Guardar simulación
               await mongoose.connection
                 .collection("SIMULATION")
                 .insertOne(simulation);
+
+              // Guardar precios históricos en ZTPRICESHISTORY (una sola vez por símbolo)
+              const historyCollection =
+                mongoose.connection.collection("ZTPRICESHISTORY");
+
+              await historyCollection.updateOne(
+                { symbol },
+                {
+                  $set: { symbol, lastUpdated: new Date() },
+                  $addToSet: {
+                    prices: { $each: filteredPrices },
+                  },
+                },
+                { upsert: true }
+              );
 
               return { message: "Simulación creada exitosamente.", simulation };
           }
@@ -604,6 +640,10 @@ async function strategy(req) {
   }
 }
 
-
-
-module.exports = { crudSimulation, crudStrategies, company, strategy, indicators };
+module.exports = {
+  crudSimulation,
+  crudStrategies,
+  company,
+  strategy,
+  indicators,
+};
