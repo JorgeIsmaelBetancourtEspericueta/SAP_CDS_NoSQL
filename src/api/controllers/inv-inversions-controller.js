@@ -7,7 +7,8 @@ const {
   crudStrategies,
   company,
   strategy,
-  indicators
+  indicators,
+  priceshistory
 } = require("../services/inv-inversions-services");
 
 //Principal structure controller class
@@ -51,6 +52,15 @@ class InversionsClass extends cds.ApplicationService {
     this.on("indicators", async (req) => {
       try {
         return await indicators(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en indicators");
+      }
+    } );
+
+
+     this.on("priceshistory", async (req) => {
+      try {
+        return await priceshistory(req);
       } catch (error) {
         req.error(400, error.message || "Error en indicators");
       }

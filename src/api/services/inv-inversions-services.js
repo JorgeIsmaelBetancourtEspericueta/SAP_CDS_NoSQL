@@ -613,6 +613,31 @@ async function company(req) {
   }
 }
 
+//Get PricesHistory
+async function priceshistory(req) {
+  try {
+    let result;
+    const { idPrice, strategy, productCode } = req?.req?.query || {};
+
+    const collection = mongoose.connection.collection("ZTPRICESHISTORY");
+
+    if (idPrice) {
+      result = await collection.find({ idPrice }).toArray();
+    } else if (strategy) {
+      result = await collection.find({ STRATEGY_NAME: strategy }).toArray();
+    } else if (productCode) {
+      result = await collection.find({ PRODUCT_CODE: productCode }).toArray();
+    } else {
+      result = await collection.find({}).toArray();
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Error al obtener registros de ZTPRICESHISTORY:", error);
+    throw new Error("Error al obtener registros de ZTPRICESHISTORY");
+  }
+}
+
 //get strategy
 async function strategy(req) {
   const Strategy = require("../models/mongoDB/Strategy.js");
@@ -646,4 +671,5 @@ module.exports = {
   company,
   strategy,
   indicators,
+  priceshistory,
 };
