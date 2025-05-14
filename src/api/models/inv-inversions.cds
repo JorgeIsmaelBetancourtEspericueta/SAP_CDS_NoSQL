@@ -105,15 +105,12 @@ entity company {
 
 entity Indicators{
         SYMBOL               : String;
-    key INDICATOR            : String;
-        NAME                 : String;
-        ASSET_TYPE           : String;
+        INDICATOR            : String;
         INTERVAL             : String;
         TIMEZONE             : String;
         DATA : array of {
             DATE : String;
-            VALUE: Decimal(10,4);
-        };
-    
+            VALUE: String;
+        }; 
 }
 

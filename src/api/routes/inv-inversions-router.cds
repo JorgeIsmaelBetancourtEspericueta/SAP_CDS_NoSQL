@@ -40,7 +40,7 @@ service PricesHistoryRouter @(path: '/api/inv') {
     @path: 'strategy'
     action strategy(strategy : entstrategies)       returns array of entstrategies;
 
-    @path: 'indicator'
-    action indicator(indicator : entindicators)     returns array of entindicators;
+    @path: 'indicators'
+    action indicators(indicator : entindicators)     returns array of entindicators;
 
 };
