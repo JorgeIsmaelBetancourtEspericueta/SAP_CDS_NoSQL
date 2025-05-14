@@ -10,7 +10,7 @@ async function crudSimulation(req) {
     }
 
     switch (action) {
-      case "get": 
+      case "get":
         try {
           let result;
           const simulationId = req?.req?.query?.idSimulation;
@@ -19,9 +19,9 @@ async function crudSimulation(req) {
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
-          if (simulationId) {          
+          if (simulationId) {
             result = await mongoose.connection
-            
+
               .collection("SIMULATION")
               .find({ ...baseFilter, idSimulation: simulationId })
               .toArray();
@@ -48,7 +48,7 @@ async function crudSimulation(req) {
           throw new Error("Error al obtener simulaciones");
         }
 
-      case "delete": 
+      case "delete":
         try {
           const { id, borrado } = req?.req?.query || {};
 
@@ -61,7 +61,6 @@ async function crudSimulation(req) {
           const filter = { idSimulation: id };
 
           if (borrado === "fisic") {
-
             const existing = await mongoose.connection
               .collection("SIMULATION")
               .findOne(filter);
@@ -78,7 +77,7 @@ async function crudSimulation(req) {
             const result = await mongoose.connection
               .collection("SIMULATION")
               .updateOne(filter, { $set: updateFields });
-               console.log("🔍 [DEBUG] Resultado de updateOne:", result);
+            console.log("🔍 [DEBUG] Resultado de updateOne:", result);
             if (result.modifiedCount === 0) {
               throw new Error("No se pudo marcar como eliminada la simulación");
             }
@@ -109,88 +108,49 @@ async function crudSimulation(req) {
         try {
           const { symbol, initial_investment, simulationName } =
             req?.req?.query || {};
-
           if (!symbol || !initial_investment || !simulationName) {
             throw new Error(
               "Faltan parámetros requeridos: 'symbol', 'initial_investment', 'simulationName'."
             );
           }
 
-          const idUser = "USER_TEST";
+          const idUser = "USER_TEST"; // Puedes personalizar esto según el usuario actual
+
+          // Definir el id de la estrategia (puedes cambiarlo si es necesario)
+          const idStrategy = "STRATEGY_001";
 
           switch (simulationName) {
             case "ReversionSimple":
               const apiKey = "NU1IF336TN4IBMS5";
-              const apiUrl = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${symbol}&apikey=${apiKey}`;
+              const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
-              const optionsData = response.data?.data;
 
-              if (!optionsData || optionsData.length === 0) {
+              const optionsData = response.data["Time Series (Daily)"];
+
+              if (!optionsData || Object.keys(optionsData).length === 0) {
                 throw new Error(
-                  "No se encontraron datos de opciones históricas."
+                  "No se encontraron datos de precios históricos."
                 );
               }
 
-              // 🆕 Guardar datos en ZTPRICESHISTORY si no existen
-              const priceHistoryCollection =
-                mongoose.connection.collection("ZTPRICESHISTORY");
-              const existing = await priceHistoryCollection.findOne({ symbol });
-
-              if (!existing) {
-                await priceHistoryCollection.insertOne({
-                  symbol,
-                  source: "AlphaVantage",
-                  data: optionsData,
-                  lastUpdate: new Date(),
-                });
-              } else {
-                console.log(
-                  `Datos ya existentes para el símbolo ${symbol}. No se duplican.`
-                );
-              }
-
-              const idStrategy = "STRATEGY_001";
-
-              const validOptions = optionsData.filter((option) => {
-                return (
-                  option.type === "call" &&
-                  parseFloat(option.mark) > 0 &&
-                  new Date(option.expiration) > new Date()
-                );
+              // Organizar los precios por fecha
+              const prices = Object.keys(optionsData).map((date) => {
+                const { "4. close": close } = optionsData[date];
+                return { date, close: parseFloat(close) };
               });
 
-              if (validOptions.length === 0) {
-                throw new Error(
-                  "No hay suficientes datos válidos para calcular la estrategia."
-                );
-              }
+              const sortedPrices = prices.sort(
+                (a, b) => new Date(b.date) - new Date(a.date)
+              );
 
-              const markPricesByExpirationDate = {};
-              for (const option of validOptions) {
-                const { expiration, mark } = option;
-                if (!markPricesByExpirationDate[expiration])
-                  markPricesByExpirationDate[expiration] = [];
-                markPricesByExpirationDate[expiration].push(parseFloat(mark));
-              }
-
-              const expirationDates = Object.keys(
-                markPricesByExpirationDate
-              ).sort();
-              const prices = expirationDates.map((date) => {
-                const values = markPricesByExpirationDate[date];
-                const avgPrice =
-                  values.reduce((sum, p) => sum + p, 0) / values.length;
-                return { date, close: avgPrice };
-              });
-
-              if (prices.length < 5) {
+              if (sortedPrices.length < 5) {
                 throw new Error(
                   "No hay suficientes datos para calcular la estrategia."
                 );
               }
 
-              const smaPeriod = Math.min(5, prices.length);
-              const smaValues = prices.map((_, i, arr) => {
+              const smaPeriod = Math.min(5, sortedPrices.length);
+              const smaValues = sortedPrices.map((_, i, arr) => {
                 if (i < smaPeriod - 1) return null;
                 const sum = arr
                   .slice(i - smaPeriod + 1, i + 1)
@@ -202,16 +162,32 @@ async function crudSimulation(req) {
                 exitPrice = null,
                 entryDate = null,
                 exitDate = null;
-              for (let i = smaPeriod; i < prices.length; i++) {
-                const price = prices[i].close;
+              const signals = [];
+
+              // Identificar las señales de compra y venta
+              for (let i = smaPeriod; i < sortedPrices.length; i++) {
+                const price = sortedPrices[i].close;
                 const sma = smaValues[i];
                 if (!sma) continue;
+
                 if (!entryPrice && price < sma * 0.95) {
                   entryPrice = price;
-                  entryDate = prices[i].date;
+                  entryDate = sortedPrices[i].date;
+                  signals.push({
+                    date: new Date(entryDate),
+                    type: "BUY",
+                    price: entryPrice,
+                    reasoning: "Precio por debajo del 95% del SMA",
+                  });
                 } else if (entryPrice && price > sma * 1.05) {
                   exitPrice = price;
-                  exitDate = prices[i].date;
+                  exitDate = sortedPrices[i].date;
+                  signals.push({
+                    date: new Date(exitDate),
+                    type: "SELL",
+                    price: exitPrice,
+                    reasoning: "Precio por encima del 105% del SMA",
+                  });
                   break;
                 }
               }
@@ -222,61 +198,29 @@ async function crudSimulation(req) {
                 );
               }
 
+              // Cálculo de resultados
               const investment = parseFloat(initial_investment);
               const unitsBought = investment / entryPrice;
               const totalExitValue = unitsBought * exitPrice;
               const totalProfit = totalExitValue - investment;
               const returnPercentage = totalProfit / investment;
 
-              const recentPrices = prices.slice(-smaPeriod);
-              const priceChanges = recentPrices
-                .map((v, i, arr) => (i === 0 ? 0 : v.close - arr[i - 1].close))
-                .slice(1);
-              const avgChange =
-                priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
-              const volatility =
-                priceChanges.reduce(
-                  (a, b) => a + Math.pow(b - avgChange, 2),
-                  0
-                ) / priceChanges.length;
-
-              const trend =
-                avgChange > 0
-                  ? "bullish"
-                  : avgChange < 0
-                  ? "bearish"
-                  : "sideways";
-              const volatilityLevel =
-                volatility > 2 ? "high" : volatility > 1 ? "medium" : "low";
-
+              // Crear la simulación con la estructura requerida
               const simulation = {
                 idSimulation: `SIM_${Date.now()}`,
                 idUser,
                 idStrategy,
                 simulationName,
                 symbol,
-                startDate: new Date(entryDate),
-                endDate: new Date(exitDate),
+                startDate: new Date(exitDate),
+                endDate: new Date(entryDate),
                 amount: investment,
-                specs: `Trend: ${trend}, Volatility: ${volatilityLevel}`,
+                specs: "Trend: bearish, Volatility: high", // Puedes ajustar esta descripción según el análisis
                 result: parseFloat(totalProfit.toFixed(2)),
                 percentageReturn: parseFloat(
                   (returnPercentage * 100).toFixed(2)
                 ),
-                signals: [
-                  {
-                    date: new Date(entryDate),
-                    type: "BUY",
-                    price: entryPrice,
-                    reasoning: "Precio por debajo del 95% del SMA",
-                  },
-                  {
-                    date: new Date(exitDate),
-                    type: "SELL",
-                    price: exitPrice,
-                    reasoning: "Precio por encima del 105% del SMA",
-                  },
-                ],
+                signals, // Se incluyen las señales de compra y venta
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
@@ -286,13 +230,14 @@ async function crudSimulation(req) {
                         CURRENT: true,
                         REGDATE: new Date(),
                         REGTIME: new Date(),
-                        REGUSER: "FIBARRAC",
+                        REGUSER: "FIBARRAC", // Asegúrate de usar el nombre del usuario correspondiente
                       },
                     ],
                   },
                 ],
               };
 
+              // Insertar la simulación en la base de datos
               await mongoose.connection
                 .collection("SIMULATION")
                 .insertOne(simulation);
@@ -377,11 +322,9 @@ async function crudStrategies(req) {
     if (!action) throw new Error("El parámetro 'action' es obligatorio.");
 
     await connectToMongoDB(); // conecta a Mongo
-//get start
+    //get start
 
     switch (action) {
-      
-
       case "post":
         try {
           const strategyData = req.data?.strategy;
@@ -553,29 +496,22 @@ async function crudStrategies(req) {
   }
 }
 
-
 //limit
 
-
-async function company(req){
+async function company(req) {
   const Company = require("../models/mongoDB/company.js");
   try {
     // Buscar todas las empresas activas
-   const companies = await Company.find({});
+    const companies = await Company.find({});
     return companies.map((c) => c.toObject());
   } catch (error) {
     console.error("Error en getCompany:", error.message);
-    return req.error(
-      500,
-      `Error al obtener empresa(s): ${error.message}`
-    );
+    return req.error(500, `Error al obtener empresa(s): ${error.message}`);
   }
-
 }
 
-
 //get strategy
- async function strategy(req) {
+async function strategy(req) {
   const Strategy = require("../models/mongoDB/Strategy.js");
 
   try {
@@ -587,18 +523,18 @@ async function company(req){
 
     // Si no se encuentran estrategias, enviar un error 404
     if (strategies.length === 0) {
-      return req.error(404, 'No se encontraron estrategias activas y no eliminadas.');
+      return req.error(
+        404,
+        "No se encontraron estrategias activas y no eliminadas."
+      );
     }
 
     // Si hay estrategias, devolverlas en formato objeto
     return strategies.map((s) => s.toObject());
   } catch (error) {
     console.error("Error en getStrategy:", error.message);
-    return req.error(
-      500,`Error al obtener estrategias: ${error.message}`
-    );
+    return req.error(500, `Error al obtener estrategias: ${error.message}`);
   }
-} 
-
+}
 
 module.exports = { crudSimulation, crudStrategies, company, strategy };
