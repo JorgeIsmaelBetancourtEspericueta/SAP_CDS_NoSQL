@@ -17,6 +17,7 @@ service PricesHistoryRouter @(path: '/api/inv') {
     entity entstrategies as projection on myinv.strategies;
     entity entsimulation as projection on myinv.Simulation;
     entity entcompany    as projection on myinv.company;
+    entity entindicators as projection on myinv.Indicators;
 
     // 5. Define the route for API Get All Prices History
     // Important: Don't forget that function name must be the same as the path
@@ -38,5 +39,8 @@ service PricesHistoryRouter @(path: '/api/inv') {
     //GET para strategies
     @path: 'strategy'
     action strategy(strategy : entstrategies)       returns array of entstrategies;
+
+    @path: 'indicator'
+    action indicator(indicator : entindicators)     returns array of entindicators;
 
 };

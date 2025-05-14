@@ -103,3 +103,17 @@ entity company {
         OFFICIAL_SITE            : String;
 }
 
+entity Indicators{
+        SYMBOL               : String;
+    key INDICATOR            : String;
+        NAME                 : String;
+        ASSET_TYPE           : String;
+        INTERVAL             : String;
+        TIMEZONE             : String;
+        DATA : array of {
+            DATE : String;
+            VALUE: Decimal(10,4);
+        };
+    
+}
+
