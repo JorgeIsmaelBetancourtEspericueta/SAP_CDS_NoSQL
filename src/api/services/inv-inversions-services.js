@@ -249,49 +249,51 @@ async function crudSimulation(req) {
                 return sum / smaPeriod;
               });
 
-              let entryPrice = null,
-                exitPrice = null,
-                entryDate = null,
-                exitDate = null;
               const signals = [];
+              let holding = false;
+              let entryPrice = 0;
+              let investment = parseFloat(initial_investment);
+              let unitsBought = 0;
+              let totalProfit = 0;
 
               for (let i = smaPeriod; i < filteredPrices.length; i++) {
                 const price = filteredPrices[i].close;
                 const sma = smaValues[i];
+                const date = filteredPrices[i].date;
                 if (!sma) continue;
 
-                if (!entryPrice && price < sma * 0.95) {
+                if (!holding && price < sma * 0.98) {
+                  // BUY signal
                   entryPrice = price;
-                  entryDate = filteredPrices[i].date;
+                  unitsBought = investment / price;
+                  holding = true;
                   signals.push({
-                    date: entryDate,
+                    date,
                     type: "BUY",
                     price: entryPrice,
-                    reasoning: "Precio por debajo del 95% del SMA",
+                    reasoning: "Precio por debajo del 98% del SMA",
                   });
-                } else if (entryPrice && price > sma * 1.05) {
-                  exitPrice = price;
-                  exitDate = filteredPrices[i].date;
+                } else if (holding && price > sma * 1.02) {
+                  // SELL signal
+                  const exitPrice = price;
+                  const profit = unitsBought * exitPrice - investment;
+                  totalProfit += profit;
+                  holding = false;
                   signals.push({
-                    date: exitDate,
+                    date,
                     type: "SELL",
                     price: exitPrice,
-                    reasoning: "Precio por encima del 105% del SMA",
+                    reasoning: "Precio por encima del 102% del SMA",
                   });
-                  break;
                 }
               }
 
-              if (!entryPrice || !exitPrice) {
+              if (signals.length === 0) {
                 throw new Error(
-                  `No se identificaron puntos válidos de entrada/salida entre ${startDate} y ${endDate}. Prueba con un rango más amplio o diferente símbolo.`
+                  `No se identificaron señales de compra o venta entre ${startDate} y ${endDate}.`
                 );
               }
 
-              const investment = parseFloat(initial_investment);
-              const unitsBought = investment / entryPrice;
-              const totalExitValue = unitsBought * exitPrice;
-              const totalProfit = totalExitValue - investment;
               const returnPercentage = totalProfit / investment;
 
               const simulation = {
@@ -330,7 +332,7 @@ async function crudSimulation(req) {
                 .collection("SIMULATION")
                 .insertOne(simulation);
 
-              // Guardar precios históricos en ZTPRICESHISTORY (una sola vez por símbolo)
+              // Guardar precios históricos (una vez por símbolo)
               const historyCollection =
                 mongoose.connection.collection("ZTPRICESHISTORY");
 

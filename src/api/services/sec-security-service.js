@@ -250,9 +250,8 @@ async function CrudUsers(req) {
               .collection("ZTUSERS")
               .aggregate([
                 {
-                  $match: {USERID: userid },
+                  $match: { USERID: userid },
                 },
-                // Aquí va exactamente el mismo pipeline que en el if anterior
                 {
                   $lookup: {
                     from: "ZTROLES",
@@ -281,7 +280,7 @@ async function CrudUsers(req) {
                 { $unwind: "$ROLE_DETAIL.PRIVILEGES" },
                 {
                   $lookup: {
-                    from: "SS",
+                    from: "ZTVALUES",
                     let: { processId: "$ROLE_DETAIL.PRIVILEGES.PROCESSID" },
                     pipeline: [
                       {
@@ -301,7 +300,7 @@ async function CrudUsers(req) {
                       },
                       {
                         $lookup: {
-                          from: "SS",
+                          from: "ZTVALUES",
                           let: { viewId: "$VALUEPAID" },
                           pipeline: [
                             {
@@ -321,7 +320,7 @@ async function CrudUsers(req) {
                             },
                             {
                               $lookup: {
-                                from: "SS",
+                                from: "ZTVALUES",
                                 let: { appId: "$VALUEPAID" },
                                 pipeline: [
                                   {
@@ -377,103 +376,20 @@ async function CrudUsers(req) {
                 },
                 {
                   $group: {
-                    _id: {
-                      userId: "$_id",
-                      roleId: "$ROLES.ROLEID",
-                      processId: "$ROLE_DETAIL.PRIVILEGES.PROCESSID",
-                    },
-                    PROCESS: {
-                      $first: {
-                        PROCESSID: "$ROLE_DETAIL.PRIVILEGES.PROCESSID",
-                        PROCESSNAME: "$PROCESS_INFO.VALUE",
-                        VIEWID: "$PROCESS_INFO.view.VALUEID",
-                        VIEWNAME: "$PROCESS_INFO.view.VALUE",
-                        APPLICATIONID: "$PROCESS_INFO.view.application.VALUEID",
-                        APPLICATIONNAME: "$PROCESS_INFO.view.application.VALUE",
+                    _id: "$USERID",
+                    USERNAME: { $first: "$USERNAME" },
+                    EMAIL: { $first: "$EMAIL" },
+                    ROLES: {
+                      $push: {
+                        ROLEID: "$ROLES.ROLEID",
+                        ACTIVE: "$ROLES.ACTIVE",
                         PRIVILEGES: {
-                          $map: {
-                            input: "$ROLE_DETAIL.PRIVILEGES.PRIVILEGEID",
-                            as: "privId",
-                            in: {
-                              PRIVILEGEID: "$$privId",
-                              PRIVILEGENAME: "$$privId",
-                            },
-                          },
+                          PROCESSID: "$ROLE_DETAIL.PRIVILEGES.PROCESSID",
+                          ACTIONS: "$ROLE_DETAIL.PRIVILEGES.ACTIONS",
+                          PROCESS_INFO: "$PROCESS_INFO",
                         },
                       },
                     },
-                    ROLE_META: { $first: "$ROLES" },
-                    ROLE_DETAILS: {
-                      $first: {
-                        ROLEID: "$ROLE_DETAIL.ROLEID",
-                        ROLENAME: "$ROLE_DETAIL.ROLENAME",
-                        DESCRIPTION: "$ROLE_DETAIL.DESCRIPTION",
-                        DETAIL_ROW: "$ROLE_DETAIL.DETAIL_ROW",
-                      },
-                    },
-                    USER: { $first: "$$ROOT" },
-                  },
-                },
-                {
-                  $group: {
-                    _id: {
-                      userId: "$_id.userId",
-                      roleId: "$_id.roleId",
-                    },
-                    ROLEID: { $first: "$ROLE_META.ROLEID" },
-                    ROLEIDSAP: { $first: "$ROLE_META.ROLEIDSAP" },
-                    ROLENAME: { $first: "$ROLE_DETAILS.ROLENAME" },
-                    DESCRIPTION: { $first: "$ROLE_DETAILS.DESCRIPTION" },
-                    DETAIL_ROW: { $first: "$ROLE_DETAILS.DETAIL_ROW" },
-                    PROCESSES: { $push: "$PROCESS" },
-                    USER: { $first: "$USER" },
-                  },
-                },
-                {
-                  $group: {
-                    _id: "$_id.userId",
-                    ROLES: {
-                      $push: {
-                        ROLEID: "$ROLEID",
-                        ROLEIDSAP: "$ROLEIDSAP",
-                        ROLENAME: "$ROLENAME",
-                        DESCRIPTION: "$DESCRIPTION",
-                        DETAIL_ROW: "$DETAIL_ROW",
-                        PROCESSES: "$PROCESSES",
-                      },
-                    },
-                    USER: { $first: "$USER" },
-                  },
-                },
-                {
-                  $project: {
-                    _id: 0,
-                    USERID: "$USER.USERID",
-                    PASSWORD: "$USER.PASSWORD",
-                    USERNAME: "$USER.USERNAME",
-                    ALIAS: "$USER.ALIAS",
-                    FIRSTNAME: "$USER.FIRSTNAME",
-                    LASTNAME: "$USER.LASTNAME",
-                    BIRTHDAYDATE: "$USER.BIRTHDAYDATE",
-                    COMPANYID: "$USER.COMPANYID",
-                    COMPANYNAME: "$USER.COMPANYNAME",
-                    COMPANYALIAS: "$USER.COMPANYALIAS",
-                    CEDIID: "$USER.CEDIID",
-                    EMPLOYEEID: "$USER.EMPLOYEEID",
-                    EMAIL: "$USER.EMAIL",
-                    PHONENUMBER: "$USER.PHONENUMBER",
-                    EXTENSION: "$USER.EXTENSION",
-                    DEPARTMENT: "$USER.DEPARTMENT",
-                    FUNCTION: "$USER.FUNCTION",
-                    STREET: "$USER.STREET",
-                    POSTALCODE: "$USER.POSTALCODE",
-                    CITY: "$USER.CITY",
-                    REGION: "$USER.REGION",
-                    STATE: "$USER.STATE",
-                    COUNTRY: "$USER.COUNTRY",
-                    AVATAR: "$USER.AVATAR",
-                    DETAIL_ROW: "$USER.DETAIL_ROW",
-                    ROLES: "$ROLES",
                   },
                 },
               ])
@@ -538,7 +454,7 @@ async function CrudUsers(req) {
             throw new Error("El USERID ya existe.");
           }
 
-          // ✅ Verificación de existencia de roles en la colección ZTROLES
+          // Verificación de existencia de roles en la colección ZTROLES
           const roleIds = ROLES?.map((role) => role.ROLEID) || [];
 
           const existingRoles = await mongoose.connection
@@ -817,15 +733,15 @@ async function CrudValues(req) {
           if (!labelid && !valueid) {
             // Caso 1: No hay labelid ni valueid
             result = await mongoose.connection
-            .collection("ZTVALUES") // ✅ Cambiado a la colección correcta
-            .aggregate([
-              {
-                $match: {
-                  "DETAIL_ROW.ACTIVED": true, // Filtra los valores activos
+              .collection("ZTVALUES") // ✅ Cambiado a la colección correcta
+              .aggregate([
+                {
+                  $match: {
+                    "DETAIL_ROW.ACTIVED": true, // Filtra los valores activos
+                  },
                 },
-              },
-            ])
-            .toArray();
+              ])
+              .toArray();
           } else if (labelid && !valueid) {
             // Caso 2: Solo hay labelid
             result = await mongoose.connection
@@ -1238,45 +1154,52 @@ async function CrudRoles(req) {
         } catch (error) {
           throw new Error(error.message);
         }
-        case "update":
-          try {
-            const { roleid } = req?.req?.query;
-            const { ROLENAME, DESCRIPTION, PRIVILEGES } = req.data.roles;
-        
-            if (!roleid) {
-              throw new Error("El parámetro ROLEID en query es obligatorio para actualizar");
-            }
-        
-            const collection = mongoose.connection.collection("ZTROLES");
-        
-            const exists = await collection.findOne({ ROLEID: roleid });
-        
-            if (!exists) {
-              return req.error(404, `No se encontró un rol con el ID ${roleid}`);
-            }
-        
-            const updatedFields = {};
-        
-            if (ROLENAME) updatedFields.ROLENAME = ROLENAME;
-            if (DESCRIPTION) updatedFields.DESCRIPTION = DESCRIPTION;
-            if (Array.isArray(PRIVILEGES)) updatedFields.PRIVILEGES = PRIVILEGES;
-        
-            if (Object.keys(updatedFields).length === 0) {
-              throw new Error("No se proporcionaron campos válidos para actualizar");
-            }
-        
-            await collection.updateOne({ ROLEID: roleid }, { $set: updatedFields });
-        
-            const updatedRole = await collection.findOne({ ROLEID: roleid });
-        
-            return {
-              message: "Rol actualizado exitosamente",
-              role: updatedRole,
-            };
-          } catch (error) {
-            throw new Error(error.message);
+      case "update":
+        try {
+          const { roleid } = req?.req?.query;
+          const { ROLENAME, DESCRIPTION, PRIVILEGES } = req.data.roles;
+
+          if (!roleid) {
+            throw new Error(
+              "El parámetro ROLEID en query es obligatorio para actualizar"
+            );
           }
-      
+
+          const collection = mongoose.connection.collection("ZTROLES");
+
+          const exists = await collection.findOne({ ROLEID: roleid });
+
+          if (!exists) {
+            return req.error(404, `No se encontró un rol con el ID ${roleid}`);
+          }
+
+          const updatedFields = {};
+
+          if (ROLENAME) updatedFields.ROLENAME = ROLENAME;
+          if (DESCRIPTION) updatedFields.DESCRIPTION = DESCRIPTION;
+          if (Array.isArray(PRIVILEGES)) updatedFields.PRIVILEGES = PRIVILEGES;
+
+          if (Object.keys(updatedFields).length === 0) {
+            throw new Error(
+              "No se proporcionaron campos válidos para actualizar"
+            );
+          }
+
+          await collection.updateOne(
+            { ROLEID: roleid },
+            { $set: updatedFields }
+          );
+
+          const updatedRole = await collection.findOne({ ROLEID: roleid });
+
+          return {
+            message: "Rol actualizado exitosamente",
+            role: updatedRole,
+          };
+        } catch (error) {
+          throw new Error(error.message);
+        }
+
       case "get":
         try {
           const { roleid } = req?.req?.query;
