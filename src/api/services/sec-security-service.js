@@ -657,62 +657,85 @@ async function CrudUsers(req) {
   }
 }
 
-// Servicio para eliminar un registro de la colección correspondiente (por query params)
-
 async function DeleteRecord(req) {
   try {
-    // Extraer los parámetros del request
-    const { roleid, valueid, labelid, userid, borrado } = req?.req?.query || {};
+    // Extraer los parámetros de la request
+    const { roleid, valueid, labelid, userid, borrado } = req?.req?.query;
 
     // Validación: al menos un ID debe estar presente
     if (!labelid && !userid && !roleid && !valueid) {
       throw new Error("Se debe proporcionar al menos un ID para eliminar");
     }
-    console.log("borrado", userid);
-    const currentDate = new Date();
 
-    // Función para marcar como eliminado según tipo (lógico o físico)
+    console.log("Intentando eliminar:", {
+      userid,
+      roleid,
+      labelid,
+      valueid,
+      borrado,
+    });
+
+    // Función genérica para simular eliminación (solo actualización de flags)
     const deleteFromCollection = async (collection, fieldName, value) => {
       const filter = { [fieldName]: value };
-      // Campos a modificar según el tipo de eliminación
+
+      const existingDoc = await mongoose.connection
+        .collection(collection)
+        .findOne(filter);
+
+      if (!existingDoc) {
+        throw new Error(`No se encontró el registro en la colección ${collection}`);
+      }
+
+      // Verificar si ya está en el estado deseado
+      const yaBorrado =
+        borrado === "fisic"
+          ? existingDoc.DETAIL_ROW?.DELETED === false
+          : existingDoc.DETAIL_ROW?.DELETED === true;
+
+      if (yaBorrado) {
+        throw new Error(
+          `El registro ya fue marcado como ${
+            borrado === "fisic" ? "eliminado físicamente" : "eliminado lógicamente"
+          } en la colección ${collection}`
+        );
+      }
+
       const updateFields = {
         "DETAIL_ROW.ACTIVED": false,
-        "DETAIL_ROW.DELETED": true,
+        "DETAIL_ROW.DELETED": borrado !== "fisic",
       };
-
-      if (borrado !== "fisic") {
-        updateFields["DETAIL_ROW.DELETED"] = false;
-      }
 
       const result = await mongoose.connection
         .collection(collection)
         .updateOne(filter, { $set: updateFields });
 
       if (result.modifiedCount === 0) {
-        throw new Error(
-          `No se pudo actualizar el registro en la colección ${collection}`
-        );
+        throw new Error(`No se pudo actualizar el registro en la colección ${collection}`);
       }
 
       return {
-        message: `Registro marcado como eliminado ${
-          borrado === "fisic" ? "físicamente" : "lógicamente"
+        message: `Registro marcado como ${
+          borrado === "fisic" ? "eliminado físicamente" : "eliminado lógicamente"
         } en la colección ${collection}`,
       };
     };
 
-    // Lógica según qué ID se proporciona (usa claves personalizadas en mayúsculas)
-    if (labelid)
-      return await deleteFromCollection("ZTLABELS", "LABELID", labelid);
+    // Verificar y aplicar eliminación lógica o "física"
+    if (labelid) return await deleteFromCollection("ZTLABELS", "LABELID", labelid);
     if (userid) return await deleteFromCollection("ZTUSERS", "USERID", userid);
     if (roleid) return await deleteFromCollection("ZTROLES", "ROLEID", roleid);
-    if (valueid)
-      return await deleteFromCollection("ZTVALUES", "VALUEID", valueid);
+    if (valueid) return await deleteFromCollection("ZTVALUES", "VALUEID", valueid);
   } catch (error) {
     console.error("Error al eliminar el registro:", error.message);
-    throw error;
+    throw {
+      code: 400,
+      message: error.message,
+      "@Common.numericSeverity": 4,
+    };
   }
 }
+
 
 async function CrudValues(req) {
   try {
