@@ -214,7 +214,7 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "NU1IF336TN4IBMS5";
+              const apiKey = "TU_API_KEY";
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data["Time Series (Daily)"];
@@ -225,7 +225,6 @@ async function crudSimulation(req) {
                 );
               }
 
-              // Convertir y filtrar precios por fecha
               const filteredPrices = Object.keys(optionsData)
                 .filter((date) => date >= startDate && date <= endDate)
                 .map((date) => ({
@@ -251,60 +250,76 @@ async function crudSimulation(req) {
 
               const signals = [];
               let holding = false;
-              let entryPrice = 0;
-              let investment = parseFloat(initial_investment);
-              let unitsBought = 0;
+              let unitsHeld = 0;
+              let cash = parseFloat(initial_investment);
               let totalProfit = 0;
+              let totalBoughtUnits = 0;
+              let totalSoldUnits = 0;
 
               for (let i = smaPeriod; i < filteredPrices.length; i++) {
                 const price = filteredPrices[i].close;
                 const sma = smaValues[i];
                 const date = filteredPrices[i].date;
-
                 if (!sma) continue;
 
-                let signal = null;
-                let reasoning = null;
-                let calculation = null;
-
-                if (!holding && price < sma * 0.98) {
-                  signal = "BUY";
-                  reasoning = "Precio por debajo del 98% del SMA";
-                  entryPrice = price;
-                  unitsBought = investment / price;
-                  holding = true;
-                  calculation = `SMA < 98%`;
-                } else if (holding && price > sma * 1.02) {
-                  signal = "SELL";
-                  reasoning = "Precio por encima del 102% del SMA";
-                  const exitPrice = price;
-                  const profit = unitsBought * exitPrice - investment;
-                  totalProfit += profit;
-                  holding = false;
-                  calculation = `SMA > 102%`;
-                } else {
-                  calculation = holding ? "SMA > 102%" : "SMA < 98%";
-                }
-
-                signals.push({
+                const buyThreshold = sma * 0.98;
+                const sellThreshold = sma * 1.02;
+                const dailySignal = {
                   date,
-                  price: parseFloat(price.toFixed(2)),
+                  price,
                   sma: parseFloat(sma.toFixed(2)),
-                  calculation,
-                  signal,
-                  reasoning,
-                  holding,
-                });
+                  calculation: "",
+                  signal: null,
+                  reasoning: null,
+                  holding: unitsHeld > 0,
+                  unitsBought: 0,
+                  unitsSold: 0,
+                  cashBefore: parseFloat(cash.toFixed(2)),
+                  cashAfter: null,
+                };
+
+                if (price < buyThreshold && cash > 0) {
+                  const investment = cash * 0.5;
+                  const unitsToBuy = investment / price;
+                  unitsHeld += unitsToBuy;
+                  cash -= unitsToBuy * price;
+                  totalBoughtUnits += unitsToBuy;
+
+                  dailySignal.signal = "BUY";
+                  dailySignal.reasoning = "Precio por debajo del 98% del SMA";
+                  dailySignal.calculation = `${price.toFixed(
+                    2
+                  )} < (98% de ${sma.toFixed(2)} = ${buyThreshold.toFixed(2)})`;
+                  dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
+                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  signals.push(dailySignal);
+                } else if (price > sellThreshold && unitsHeld > 0) {
+                  const unitsToSell = unitsHeld * 0.25;
+                  const revenue = unitsToSell * price;
+                  cash += revenue;
+                  unitsHeld -= unitsToSell;
+                  totalSoldUnits += unitsToSell;
+
+                  dailySignal.signal = "SELL";
+                  dailySignal.reasoning = "Precio por encima del 102% del SMA";
+                  dailySignal.calculation = `${price.toFixed(
+                    2
+                  )} > (102% de ${sma.toFixed(2)} = ${sellThreshold.toFixed(
+                    2
+                  )})`;
+                  dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
+                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  signals.push(dailySignal);
+                } else {
+                  // Día sin señal pero lo registramos
+                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  signals.push(dailySignal);
+                }
               }
 
-              const executedSignals = signals.filter((s) => s.signal !== null);
-              if (executedSignals.length === 0) {
-                throw new Error(
-                  `No se identificaron señales de compra o venta entre ${startDate} y ${endDate}.`
-                );
-              }
-
-              const returnPercentage = totalProfit / investment;
+              const lastPrice = filteredPrices.at(-1).close;
+              const finalValue = unitsHeld * lastPrice;
+              const finalBalance = cash + finalValue;
 
               const simulation = {
                 idSimulation: `SIM_${Date.now()}`,
@@ -314,12 +329,25 @@ async function crudSimulation(req) {
                 symbol,
                 startDate,
                 endDate,
-                amount: investment,
+                amount: parseFloat(initial_investment),
                 specs: "Trend: bearish, Volatility: high",
-                result: parseFloat(totalProfit.toFixed(2)),
-                percentageReturn: parseFloat(
-                  (returnPercentage * 100).toFixed(2)
+                result: parseFloat(
+                  (finalBalance - initial_investment).toFixed(2)
                 ),
+                percentageReturn: parseFloat(
+                  (
+                    ((finalBalance - initial_investment) / initial_investment) *
+                    100
+                  ).toFixed(2)
+                ),
+                summary: {
+                  totalBoughtUnits: parseFloat(totalBoughtUnits.toFixed(4)),
+                  totalSoldUnits: parseFloat(totalSoldUnits.toFixed(4)),
+                  remainingUnits: parseFloat(unitsHeld.toFixed(4)),
+                  finalCash: parseFloat(cash.toFixed(2)),
+                  finalValue: parseFloat(finalValue.toFixed(2)),
+                  finalBalance: parseFloat(finalBalance.toFixed(2)),
+                },
                 signals,
                 DETAIL_ROW: [
                   {
@@ -337,16 +365,11 @@ async function crudSimulation(req) {
                 ],
               };
 
-              // Guardar simulación
               await mongoose.connection
                 .collection("SIMULATION")
                 .insertOne(simulation);
 
-              // Guardar precios históricos
-              const historyCollection =
-                mongoose.connection.collection("ZTPRICESHISTORY");
-
-              await historyCollection.updateOne(
+              await mongoose.connection.collection("ZTPRICESHISTORY").updateOne(
                 { symbol },
                 {
                   $set: { symbol, lastUpdated: new Date() },
@@ -357,7 +380,10 @@ async function crudSimulation(req) {
                 { upsert: true }
               );
 
-              return { message: "Simulación creada exitosamente.", simulation };
+              return {
+                message: "Simulación creada exitosamente.",
+                simulation,
+              };
           }
         } catch (error) {
           console.error("Error detallado:", error.message || error);
