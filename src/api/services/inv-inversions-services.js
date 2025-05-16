@@ -260,35 +260,45 @@ async function crudSimulation(req) {
                 const price = filteredPrices[i].close;
                 const sma = smaValues[i];
                 const date = filteredPrices[i].date;
+
                 if (!sma) continue;
 
+                let signal = null;
+                let reasoning = null;
+                let calculation = null;
+
                 if (!holding && price < sma * 0.98) {
-                  // BUY signal
+                  signal = "BUY";
+                  reasoning = "Precio por debajo del 98% del SMA";
                   entryPrice = price;
                   unitsBought = investment / price;
                   holding = true;
-                  signals.push({
-                    date,
-                    type: "BUY",
-                    price: entryPrice,
-                    reasoning: "Precio por debajo del 98% del SMA",
-                  });
+                  calculation = `SMA < 98%`;
                 } else if (holding && price > sma * 1.02) {
-                  // SELL signal
+                  signal = "SELL";
+                  reasoning = "Precio por encima del 102% del SMA";
                   const exitPrice = price;
                   const profit = unitsBought * exitPrice - investment;
                   totalProfit += profit;
                   holding = false;
-                  signals.push({
-                    date,
-                    type: "SELL",
-                    price: exitPrice,
-                    reasoning: "Precio por encima del 102% del SMA",
-                  });
+                  calculation = `SMA > 102%`;
+                } else {
+                  calculation = holding ? "SMA > 102%" : "SMA < 98%";
                 }
+
+                signals.push({
+                  date,
+                  price: parseFloat(price.toFixed(2)),
+                  sma: parseFloat(sma.toFixed(2)),
+                  calculation,
+                  signal,
+                  reasoning,
+                  holding,
+                });
               }
 
-              if (signals.length === 0) {
+              const executedSignals = signals.filter((s) => s.signal !== null);
+              if (executedSignals.length === 0) {
                 throw new Error(
                   `No se identificaron señales de compra o venta entre ${startDate} y ${endDate}.`
                 );
@@ -332,7 +342,7 @@ async function crudSimulation(req) {
                 .collection("SIMULATION")
                 .insertOne(simulation);
 
-              // Guardar precios históricos (una vez por símbolo)
+              // Guardar precios históricos
               const historyCollection =
                 mongoose.connection.collection("ZTPRICESHISTORY");
 
