@@ -276,13 +276,17 @@ async function crudSimulation(req) {
                   unitsSold: 0,
                   cashBefore: parseFloat(cash.toFixed(2)),
                   cashAfter: null,
+                  unitsHeldAfter: null,
+                  spent: 0,
+                  earned: 0,
                 };
 
                 if (price < buyThreshold && cash > 0) {
                   const investment = cash * 0.5;
                   const unitsToBuy = investment / price;
+                  const spent = unitsToBuy * price;
                   unitsHeld += unitsToBuy;
-                  cash -= unitsToBuy * price;
+                  cash -= spent;
                   totalBoughtUnits += unitsToBuy;
 
                   dailySignal.signal = "BUY";
@@ -291,7 +295,9 @@ async function crudSimulation(req) {
                     2
                   )} < (98% de ${sma.toFixed(2)} = ${buyThreshold.toFixed(2)})`;
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
+                  dailySignal.spent = parseFloat(spent.toFixed(2));
                   dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  dailySignal.unitsHeldAfter = parseFloat(unitsHeld.toFixed(4));
                   signals.push(dailySignal);
                 } else if (price > sellThreshold && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
@@ -308,11 +314,13 @@ async function crudSimulation(req) {
                     2
                   )})`;
                   dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
+                  dailySignal.earned = parseFloat(revenue.toFixed(2));
                   dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  dailySignal.unitsHeldAfter = parseFloat(unitsHeld.toFixed(4));
                   signals.push(dailySignal);
                 } else {
-                  // Día sin señal pero lo registramos
                   dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                  dailySignal.unitsHeldAfter = parseFloat(unitsHeld.toFixed(4));
                   signals.push(dailySignal);
                 }
               }
