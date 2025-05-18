@@ -1,33 +1,16 @@
 # 1. Etapa de construcción
-FROM node:20-slim AS builder
-WORKDIR /app
+FROM node:20-slim 
 
-# 1.1 Copiar solo definición de dependencias para cache
+WORKDIR /app
+                               
 COPY package*.json ./
-ENV NODE_ENV=production
-RUN npm ci                                     
 
-# 1.2 Copiar el resto del código y construir CAP
-COPY . .
-# Si usas cds build, descomenta la siguiente línea:
-# RUN npx cds build --clean                    
+RUN npm install
 
-# 1.3 Eliminar dependencias de desarrollo
-RUN npm prune --production                        
-
-# 2. Etapa de producción liviana
-FROM node:20-slim AS runtime
-WORKDIR /app
-
-# 2.1 Variables de entorno por defecto
-ENV NODE_ENV=production \
-    PORT=4004
+RUN npm run build
 
 # 2.2 Copiar artefactos desde builder
-COPY --from=builder /app /app
-
-# 2.3 Seguridad: ejecutar como usuario no-root
-USER node                                         
+COPY . .
 
 # 2.4 Exponer el puerto que usa tu CAP service
 EXPOSE 4004                                       
