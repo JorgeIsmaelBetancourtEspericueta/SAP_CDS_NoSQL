@@ -23,8 +23,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io
-          username:     ${{ secrets.AZURE_REGISTRY_USERNAME }}
-          password:     ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+          username:     ${{ secrets.AZURE_TOKEN_USERNAME }}
+          password:     ${{ secrets.AZURE_TOKEN_PASSWORD }}
 
       - name: Build and push container image to ACR
         uses: docker/build-push-action@v6
@@ -34,14 +34,10 @@ jobs:
           push: true
           tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.RESOURCE_GROUP }}:latest
           
-
       - name: Azure Login
         uses: azure/login@v2
         with: 
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: ACR login via az CLI
-        run: az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
         
       - name: Deploy to Azure Container Apps
         uses: azure/container-apps-deploy-action@v1
