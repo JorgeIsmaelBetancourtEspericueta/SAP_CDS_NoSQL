@@ -692,7 +692,7 @@ async function DeleteRecord(req) {
       const deletedStatus = existingDoc.DETAIL_ROW?.DELETED;
       const activeStatus = existingDoc.DETAIL_ROW?.ACTIVED;
 
-      // Verificación específica según el tipo de borrado
+      // Verificación de estado previo para evitar eliminar nuevamente
       if (
         borrado === "fisic" &&
         deletedStatus === true &&
@@ -705,7 +705,7 @@ async function DeleteRecord(req) {
 
       if (
         borrado !== "fisic" &&
-        deletedStatus === true &&
+        deletedStatus === false &&
         activeStatus === false
       ) {
         throw new Error(
@@ -713,10 +713,17 @@ async function DeleteRecord(req) {
         );
       }
 
-      const updateFields = {
-        "DETAIL_ROW.ACTIVED": false,
-        "DETAIL_ROW.DELETED": true,
-      };
+      // Asignar flags de acuerdo con el tipo de borrado
+      const updateFields =
+        borrado === "fisic"
+          ? {
+              "DETAIL_ROW.ACTIVED": false,
+              "DETAIL_ROW.DELETED": true,
+            }
+          : {
+              "DETAIL_ROW.ACTIVED": false,
+              "DETAIL_ROW.DELETED": false,
+            };
 
       const result = await mongoose.connection
         .collection(collection)

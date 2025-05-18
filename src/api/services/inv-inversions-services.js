@@ -187,6 +187,7 @@ async function crudSimulation(req) {
           console.error("Error al eliminar simulación:", error);
           throw new Error("Error al eliminar simulación");
         }
+
       case "post":
         try {
           const {
@@ -195,6 +196,7 @@ async function crudSimulation(req) {
             simulationName,
             startDate,
             endDate,
+            rsiPeriod = 14,
           } = req?.req?.query || {};
 
           if (
@@ -225,21 +227,34 @@ async function crudSimulation(req) {
                 );
               }
 
-              const filteredPrices = Object.keys(optionsData)
-                .filter((date) => date >= startDate && date <= endDate)
+              const smaPeriod = 5;
+              const bufferDays = Math.max(smaPeriod, rsiPeriod);
+
+              const allDatesSorted = Object.keys(optionsData).sort(
+                (a, b) => new Date(a) - new Date(b)
+              );
+
+              const extendedStartIndex =
+                allDatesSorted.findIndex((date) => date >= startDate) -
+                bufferDays;
+
+              const adjustedStartIndex =
+                extendedStartIndex >= 0 ? extendedStartIndex : 0;
+
+              const filteredPrices = allDatesSorted
+                .slice(adjustedStartIndex)
+                .filter((date) => date <= endDate)
                 .map((date) => ({
                   date,
                   close: parseFloat(optionsData[date]["4. close"]),
-                }))
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
+                }));
 
-              if (filteredPrices.length < 5) {
+              if (filteredPrices.length < bufferDays) {
                 throw new Error(
                   "No hay suficientes datos para calcular la estrategia."
                 );
               }
 
-              const smaPeriod = 5;
               const smaValues = filteredPrices.map((_, i, arr) => {
                 if (i < smaPeriod - 1) return null;
                 const sum = arr
@@ -248,26 +263,52 @@ async function crudSimulation(req) {
                 return sum / smaPeriod;
               });
 
+              const rsiValues = [];
+              for (let i = 0; i < filteredPrices.length; i++) {
+                if (i < rsiPeriod) {
+                  rsiValues.push(null);
+                  continue;
+                }
+
+                let gains = 0,
+                  losses = 0;
+                for (let j = i - rsiPeriod + 1; j <= i; j++) {
+                  const change =
+                    filteredPrices[j].close - filteredPrices[j - 1].close;
+                  if (change > 0) gains += change;
+                  else losses -= change;
+                }
+
+                const avgGain = gains / rsiPeriod;
+                const avgLoss = losses / rsiPeriod;
+                const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                const rsi = 100 - 100 / (1 + rs);
+                rsiValues.push(parseFloat(rsi.toFixed(2)));
+              }
+
               const signals = [];
-              let holding = false;
               let unitsHeld = 0;
               let cash = parseFloat(initial_investment);
-              let totalProfit = 0;
               let totalBoughtUnits = 0;
               let totalSoldUnits = 0;
 
-              for (let i = smaPeriod; i < filteredPrices.length; i++) {
-                const price = filteredPrices[i].close;
+              for (let i = 0; i < filteredPrices.length; i++) {
+                const { date, close: price } = filteredPrices[i];
+                if (date < startDate) continue; // Solo simular desde la fecha inicial
+
                 const sma = smaValues[i];
-                const date = filteredPrices[i].date;
-                if (!sma) continue;
+                const rsi = rsiValues[i];
+
+                if (!sma || rsi === null) continue;
 
                 const buyThreshold = sma * 0.98;
                 const sellThreshold = sma * 1.02;
+
                 const dailySignal = {
                   date,
                   price,
                   sma: parseFloat(sma.toFixed(2)),
+                  rsi: parseFloat(rsi.toFixed(2)),
                   calculation: "",
                   signal: null,
                   reasoning: null,
@@ -276,23 +317,28 @@ async function crudSimulation(req) {
                   unitsSold: 0,
                   cashBefore: parseFloat(cash.toFixed(2)),
                   cashAfter: null,
+                  unitsHeldAfter: null,
+                  spent: 0,
+                  earned: 0,
                 };
 
                 if (price < buyThreshold && cash > 0) {
                   const investment = cash * 0.5;
                   const unitsToBuy = investment / price;
+                  const spent = unitsToBuy * price;
                   unitsHeld += unitsToBuy;
-                  cash -= unitsToBuy * price;
+                  cash -= spent;
                   totalBoughtUnits += unitsToBuy;
 
                   dailySignal.signal = "BUY";
-                  dailySignal.reasoning = "Precio por debajo del 98% del SMA";
+                  dailySignal.reasoning = `Precio < 98% SMA. RSI: ${rsi.toFixed(
+                    2
+                  )}`;
                   dailySignal.calculation = `${price.toFixed(
                     2
-                  )} < (98% de ${sma.toFixed(2)} = ${buyThreshold.toFixed(2)})`;
+                  )} < ${buyThreshold.toFixed(2)}`;
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
-                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
-                  signals.push(dailySignal);
+                  dailySignal.spent = parseFloat(spent.toFixed(2));
                 } else if (price > sellThreshold && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
                   const revenue = unitsToSell * price;
@@ -301,20 +347,19 @@ async function crudSimulation(req) {
                   totalSoldUnits += unitsToSell;
 
                   dailySignal.signal = "SELL";
-                  dailySignal.reasoning = "Precio por encima del 102% del SMA";
+                  dailySignal.reasoning = `Precio > 102% SMA. RSI: ${rsi.toFixed(
+                    2
+                  )}`;
                   dailySignal.calculation = `${price.toFixed(
                     2
-                  )} > (102% de ${sma.toFixed(2)} = ${sellThreshold.toFixed(
-                    2
-                  )})`;
+                  )} > ${sellThreshold.toFixed(2)}`;
                   dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
-                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
-                  signals.push(dailySignal);
-                } else {
-                  // Día sin señal pero lo registramos
-                  dailySignal.cashAfter = parseFloat(cash.toFixed(2));
-                  signals.push(dailySignal);
+                  dailySignal.earned = parseFloat(revenue.toFixed(2));
                 }
+
+                dailySignal.cashAfter = parseFloat(cash.toFixed(2));
+                dailySignal.unitsHeldAfter = parseFloat(unitsHeld.toFixed(4));
+                signals.push(dailySignal);
               }
 
               const lastPrice = filteredPrices.at(-1).close;
@@ -330,7 +375,7 @@ async function crudSimulation(req) {
                 startDate,
                 endDate,
                 amount: parseFloat(initial_investment),
-                specs: "Trend: bearish, Volatility: high",
+                specs: `Trend: bearish, Volatility: high, RSI_Period: ${rsiPeriod}`,
                 result: parseFloat(
                   (finalBalance - initial_investment).toFixed(2)
                 ),
@@ -384,12 +429,15 @@ async function crudSimulation(req) {
                 message: "Simulación creada exitosamente.",
                 simulation,
               };
+
+            default:
+              throw new Error("Estrategia no reconocida.");
           }
         } catch (error) {
-          console.error("Error detallado:", error.message || error);
-          throw new Error(
-            `Error al crear la simulación: ${error.message || error}`
-          );
+          return {
+            error: true,
+            message: error.message || "Error al procesar la solicitud.",
+          };
         }
 
       case "update":
