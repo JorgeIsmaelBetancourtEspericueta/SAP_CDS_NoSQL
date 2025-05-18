@@ -216,7 +216,7 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "TU_API_KEY";
+              const apiKey = "demo";
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data["Time Series (Daily)"];
@@ -246,7 +246,11 @@ async function crudSimulation(req) {
                 .filter((date) => date <= endDate)
                 .map((date) => ({
                   date,
+                  open: parseFloat(optionsData[date]["1. open"]),
+                  high: parseFloat(optionsData[date]["2. high"]),
+                  low: parseFloat(optionsData[date]["3. low"]),
                   close: parseFloat(optionsData[date]["4. close"]),
+                  volume: parseFloat(optionsData[date]["5. volume"]),
                 }));
 
               if (filteredPrices.length < bufferDays) {
@@ -292,23 +296,27 @@ async function crudSimulation(req) {
               let totalBoughtUnits = 0;
               let totalSoldUnits = 0;
 
+              const pricesHistory = [];
+
               for (let i = 0; i < filteredPrices.length; i++) {
-                const { date, close: price } = filteredPrices[i];
-                if (date < startDate) continue; // Solo simular desde la fecha inicial
+                const {
+                  date,
+                  open,
+                  high,
+                  low,
+                  close: price,
+                  volume,
+                } = filteredPrices[i];
+                if (date < startDate) continue;
 
                 const sma = smaValues[i];
                 const rsi = rsiValues[i];
 
-                if (!sma || rsi === null) continue;
-
-                const buyThreshold = sma * 0.98;
-                const sellThreshold = sma * 1.02;
-
                 const dailySignal = {
                   date,
                   price,
-                  sma: parseFloat(sma.toFixed(2)),
-                  rsi: parseFloat(rsi.toFixed(2)),
+                  sma: sma !== null ? parseFloat(sma.toFixed(2)) : null,
+                  rsi: rsi !== null ? parseFloat(rsi.toFixed(2)) : null,
                   calculation: "",
                   signal: null,
                   reasoning: null,
@@ -322,7 +330,7 @@ async function crudSimulation(req) {
                   earned: 0,
                 };
 
-                if (price < buyThreshold && cash > 0) {
+                if (price < sma * 0.98 && cash > 0) {
                   const investment = cash * 0.5;
                   const unitsToBuy = investment / price;
                   const spent = unitsToBuy * price;
@@ -330,29 +338,29 @@ async function crudSimulation(req) {
                   cash -= spent;
                   totalBoughtUnits += unitsToBuy;
 
-                  dailySignal.signal = "BUY";
-                  dailySignal.reasoning = `Precio < 98% SMA. RSI: ${rsi.toFixed(
+                  dailySignal.signal = "COMPRA";
+                  dailySignal.reasoning = `El precio está por debajo del 98% del SMA. RSI: ${rsi.toFixed(
                     2
                   )}`;
-                  dailySignal.calculation = `${price.toFixed(
-                    2
-                  )} < ${buyThreshold.toFixed(2)}`;
+                  dailySignal.calculation = `${price.toFixed(2)} < ${(
+                    sma * 0.98
+                  ).toFixed(2)}`;
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
                   dailySignal.spent = parseFloat(spent.toFixed(2));
-                } else if (price > sellThreshold && unitsHeld > 0) {
+                } else if (price > sma * 1.02 && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
                   const revenue = unitsToSell * price;
                   cash += revenue;
                   unitsHeld -= unitsToSell;
                   totalSoldUnits += unitsToSell;
 
-                  dailySignal.signal = "SELL";
-                  dailySignal.reasoning = `Precio > 102% SMA. RSI: ${rsi.toFixed(
+                  dailySignal.signal = "VENTA";
+                  dailySignal.reasoning = `El precio está por encima del 102% del SMA. RSI: ${rsi.toFixed(
                     2
                   )}`;
-                  dailySignal.calculation = `${price.toFixed(
-                    2
-                  )} > ${sellThreshold.toFixed(2)}`;
+                  dailySignal.calculation = `${price.toFixed(2)} > ${(
+                    sma * 1.02
+                  ).toFixed(2)}`;
                   dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
                   dailySignal.earned = parseFloat(revenue.toFixed(2));
                 }
@@ -360,6 +368,22 @@ async function crudSimulation(req) {
                 dailySignal.cashAfter = parseFloat(cash.toFixed(2));
                 dailySignal.unitsHeldAfter = parseFloat(unitsHeld.toFixed(4));
                 signals.push(dailySignal);
+
+                pricesHistory.push({
+                  date,
+                  open,
+                  high,
+                  low,
+                  close: price,
+                  volume,
+                  indicators:
+                    sma !== null && rsi !== null
+                      ? `SMA: ${sma.toFixed(2)}, RSI: ${rsi.toFixed(2)}`
+                      : "",
+                  signal: dailySignal.signal || "",
+                  rules: dailySignal.reasoning || "",
+                  shares: parseFloat(unitsHeld.toFixed(4)),
+                });
               }
 
               const lastPrice = filteredPrices.at(-1).close;
@@ -375,7 +399,7 @@ async function crudSimulation(req) {
                 startDate,
                 endDate,
                 amount: parseFloat(initial_investment),
-                specs: `Trend: bearish, Volatility: high, RSI_Period: ${rsiPeriod}`,
+                specs: `Tendencia: bajista, Volatilidad: alta, Periodo RSI: ${rsiPeriod}`,
                 result: parseFloat(
                   (finalBalance - initial_investment).toFixed(2)
                 ),
@@ -394,6 +418,7 @@ async function crudSimulation(req) {
                   finalBalance: parseFloat(finalBalance.toFixed(2)),
                 },
                 signals,
+                historicalPrices: pricesHistory,
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
@@ -419,7 +444,12 @@ async function crudSimulation(req) {
                 {
                   $set: { symbol, lastUpdated: new Date() },
                   $addToSet: {
-                    prices: { $each: filteredPrices },
+                    prices: {
+                      $each: filteredPrices.map(({ date, close }) => ({
+                        date,
+                        close,
+                      })),
+                    },
                   },
                 },
                 { upsert: true }
