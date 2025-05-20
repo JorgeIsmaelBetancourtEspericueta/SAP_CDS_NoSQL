@@ -678,7 +678,7 @@ async function DeleteRecord(req) {
     // Función genérica para simular eliminación (actualización de flags)
     const deleteFromCollection = async (collection, fieldName, value) => {
       const filter = { [fieldName]: value };
-
+ 
       const existingDoc = await mongoose.connection
         .collection(collection)
         .findOne(filter);
@@ -692,20 +692,30 @@ async function DeleteRecord(req) {
       const deletedStatus = existingDoc.DETAIL_ROW?.DELETED;
       const activeStatus = existingDoc.DETAIL_ROW?.ACTIVED;
 
-      // Verificación de estado previo para evitar eliminar nuevamente
-      if (
-        borrado === "fisic" &&
-        deletedStatus === true &&
-        activeStatus === false
-      ) {
-        throw new Error(
-          `El registro en la colección ${collection} ya fue eliminado físicamente anteriormente`
-        );
-      }
 
+     // Construimos el registro de auditoría
+      const regEntry = {
+        CURRENT: true,
+        REGDATE: new Date(),
+        REGTIME: new Date(),
+        REGUSER: "USER_TEST",        
+      };
+
+      if (borrado === "fisic") {
+        // Borrado físico
+        const result = await mongoose.connection
+          .collection(collection)
+          .deleteOne(filter);
+        if (result.deletedCount === 0) {
+          throw new Error(
+            `No se pudo eliminar físicamente el registro en ${collection}`
+          );
+        }
+        return { message: `Registro eliminado físicamente de ${collection}` };
+      } else {
+              // Verificación de estado previo para evitar eliminar nuevamente
       if (
-        borrado !== "fisic" &&
-        deletedStatus === false &&
+        deletedStatus === true &&
         activeStatus === false
       ) {
         throw new Error(
@@ -713,35 +723,29 @@ async function DeleteRecord(req) {
         );
       }
 
-      // Asignar flags de acuerdo con el tipo de borrado
-      const updateFields =
-        borrado === "fisic"
-          ? {
-              "DETAIL_ROW.ACTIVED": false,
-              "DETAIL_ROW.DELETED": true,
+        // Borrado lógico: seteamos flags + agregamos entrada de auditoría
+        const updateSet = {
+          "DETAIL_ROW.ACTIVED": false,
+          "DETAIL_ROW.DELETED": true,
+        };
+        const result = await mongoose.connection
+          .collection(collection)
+          .updateOne(
+            filter,
+            {
+              $set: updateSet,
+              $push: { "DETAIL_ROW.DETAIL_ROW_REG": regEntry }
             }
-          : {
-              "DETAIL_ROW.ACTIVED": false,
-              "DETAIL_ROW.DELETED": false,
-            };
-
-      const result = await mongoose.connection
-        .collection(collection)
-        .updateOne(filter, { $set: updateFields });
-
-      if (result.modifiedCount === 0) {
-        throw new Error(
-          `No se pudo actualizar el registro en la colección ${collection}`
-        );
+          );
+        if (result.modifiedCount === 0) {
+          throw new Error(
+            `No se pudo actualizar el registro en la colección ${collection}`
+          );
+        }
+        return {
+          message: `Registro marcado como eliminado lógicamente en ${collection}`
+        };
       }
-
-      return {
-        message: `Registro marcado como ${
-          borrado === "fisic"
-            ? "eliminado físicamente"
-            : "eliminado lógicamente"
-        } en la colección ${collection}`,
-      };
     };
 
     // Verificar y aplicar eliminación
