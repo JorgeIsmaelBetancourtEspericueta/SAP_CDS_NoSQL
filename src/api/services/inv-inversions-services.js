@@ -96,9 +96,10 @@ async function crudSimulation(req) {
       case "get":
         try {
           let result;
+
           const simulationId = req?.req?.query?.idSimulation;
-          const strategie = req?.req?.query?.strategie;
-          const strategieid = req?.req?.query?.id;
+          const simulation = req?.req?.query?.simulationName;
+          const strategieid = req?.req?.query?.idStrategy;
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
@@ -108,23 +109,27 @@ async function crudSimulation(req) {
               .collection("SIMULATION")
               .find({ ...baseFilter, idSimulation: simulationId })
               .toArray();
-          } else if (strategie) {
+              console.log("1")
+          } else if (simulation) {
             result = await mongoose.connection
               .collection("SIMULATION")
-              .find({ ...baseFilter, STRATEGY_NAME: strategie })
+              .find({ ...baseFilter, simulationName: simulation })
               .toArray();
+              console.log("2")
           } else if (strategieid) {
             result = await mongoose.connection
               .collection("SIMULATION")
-              .find({ ...baseFilter, SIMULATION_ID: strategieid })
+              .find({ ...baseFilter, idStrategy: strategieid })
               .toArray();
+              console.log("3")
           } else {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find(baseFilter)
               .toArray();
+              console.log("4")
           }
-
+          
           return result;
         } catch (error) {
           console.error("Error al obtener simulaciones:", error);
