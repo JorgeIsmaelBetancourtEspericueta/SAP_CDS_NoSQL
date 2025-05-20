@@ -2,6 +2,7 @@
 using {sec as mysec} from '../models/sec-users';
 using {secValues as myval} from '../models/sec-values';
 using {secRoles as myroles} from '../models/sec-roles';
+using {catLabels as mylabels} from '../models/cat-label';
 
 
 // 2. Import the controller to implement the Logic
@@ -16,6 +17,7 @@ service securityRouter @(path: '/api/security') {
     entity entusers  as projection on mysec.users;
     entity entvalues as projection on myval.values;
     entity entroles  as projection on myroles.Roles;
+    entity entlabels  as projection on mylabels.labels;
 
 
     @Core.Description: 'crud-users'
@@ -33,5 +35,9 @@ service securityRouter @(path: '/api/security') {
     @Core.Description: 'delete-fisico-logico'
     @path            : 'deleteAny'
     action deleteAny()                    returns array of entusers;
+
+    @Core.Descripcion: 'crud-labels'
+    @path            : 'crudLabels'
+    action crudLabels(labels : entlabels) returns array of entlabels;
 
 };
