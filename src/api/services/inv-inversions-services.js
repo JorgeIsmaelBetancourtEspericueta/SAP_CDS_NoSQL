@@ -216,7 +216,7 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "TU_API_KEY"; // Reemplaza con tu API key
+              const apiKey = "demo"; // Reemplaza con tu API key
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data["Time Series (Daily)"];
@@ -300,6 +300,7 @@ async function crudSimulation(req) {
               let totalRealProfit = 0; // Ganancia real acumulada
 
               const pricesHistory = [];
+              const chartData = []; // Inicializamos el array para chart_data
 
               for (let i = 0; i < filteredPrices.length; i++) {
                 const {
@@ -411,19 +412,32 @@ async function crudSimulation(req) {
                 signals.push(dailySignal);
 
                 pricesHistory.push({
-                  date,
-                  open,
-                  high,
-                  low,
-                  close: price,
-                  volume,
-                  indicators:
+                  Date: date,
+                  Open: open,
+                  High: high,
+                  Low: low,
+                  Close: price,
+                  Volume: volume,
+                  Indicators:
                     sma !== null && rsi !== null
                       ? `SMA: ${sma.toFixed(2)}, RSI: ${rsi.toFixed(2)}`
                       : "",
-                  signal: dailySignal.signal || "",
-                  rules: dailySignal.reasoning || "",
-                  shares: parseFloat(unitsHeld.toFixed(4)),
+                  Signal: dailySignal.signal || "",
+                  Rules: dailySignal.reasoning || "",
+                  Shares: parseFloat(unitsHeld.toFixed(4)),
+                });
+
+                // Agregamos los datos para chart_data, excluyendo "Indicators", "Signals" y "Rules"
+                // Agregamos los datos para chart_data, incluyendo el valor del SMA
+                chartData.push({
+                  Date: date,
+                  Open: open,
+                  High: high,
+                  Low: low,
+                  Close: price,
+                  Volume: volume,
+                  Shares: parseFloat(unitsHeld.toFixed(4)),
+                  SMA: sma !== null ? parseFloat(sma.toFixed(2)) : null, // Aquí agregamos el SMA
                 });
               }
 
@@ -461,6 +475,7 @@ async function crudSimulation(req) {
                 },
                 signals,
                 historicalPrices: pricesHistory,
+                chart_data: chartData, // Agregamos el subarreglo chart_data aquí
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
