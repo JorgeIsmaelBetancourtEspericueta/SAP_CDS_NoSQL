@@ -723,18 +723,28 @@ async function DeleteRecord(req) {
         );
       }
 
-        // Borrado lógico: seteamos flags + agregamos entrada de auditoría
-        const updateSet = {
-          "DETAIL_ROW.ACTIVED": false,
-          "DETAIL_ROW.DELETED": true,
-        };
+        await mongoose.connection
+        .collection(collection)
+        .updateOne(
+          filter,
+          {
+            $set: {
+              "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false
+            }
+          }
+        );
         const result = await mongoose.connection
           .collection(collection)
           .updateOne(
             filter,
             {
-              $set: updateSet,
-              $push: { "DETAIL_ROW.DETAIL_ROW_REG": regEntry }
+              $set: {
+                "DETAIL_ROW.ACTIVED": false,
+                "DETAIL_ROW.DELETED": true
+              },
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+              }
             }
           );
         if (result.modifiedCount === 0) {

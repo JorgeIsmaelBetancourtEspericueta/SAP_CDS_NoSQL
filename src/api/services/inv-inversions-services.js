@@ -131,73 +131,82 @@ async function crudSimulation(req) {
           throw new Error("Error al obtener simulaciones");
         }
 
-case "delete":
-  try {
-    const { id, borrado } = req?.req?.query || {};
-    const idUser = "USER_TEST";
+      case "delete":
+        try {
+          const { id, borrado } = req?.req?.query || {};
+          const idUser = "USER_TEST";
 
-    // Validación
-    if (!id) {
-      throw new Error("Se debe proporcionar el ID de la simulación a eliminar");
-    }
+          // Validación
+          if (!id) {
+            throw new Error(
+              "Se debe proporcionar el ID de la simulación a eliminar"
+            );
+          }
 
-    const filter = { idSimulation: id };
-    const collection = mongoose.connection.collection("SIMULATION");
+          const filter = { idSimulation: id };
+          const collection = mongoose.connection.collection("SIMULATION");
 
-    // Comprobar existencia
-    const existing = await collection.findOne(filter);
-    if (!existing) {
-      throw new Error(`No existe simulación con idSimulation=${id}`);
-    }
+          // Comprobar existencia
+          const existing = await collection.findOne(filter);
+          if (!existing) {
+            throw new Error(`No existe simulación con idSimulation=${id}`);
+          }
 
-    // Comprobar estado previo
-    const dr = existing.DETAIL_ROW;
-    if (dr?.DELETED === true && dr?.ACTIVED === false) {
-      throw new Error("La simulación ya fue eliminada lógicamente anteriormente");
-    }
+          // Comprobar estado previo
+          const dr = existing.DETAIL_ROW;
+          if (dr?.DELETED === true && dr?.ACTIVED === false) {
+            throw new Error(
+              "La simulación ya fue eliminada lógicamente anteriormente"
+            );
+          }
 
-    // Registro de auditoría
-    const regEntry = {
-      CURRENT: true,
-      REGDATE: new Date(),
-      REGTIME: new Date(),
-      REGUSER: idUser,
-    };
+          // Registro de auditoría
+          const regEntry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: idUser,
+          };
 
-    if (borrado === "fisic") {
-      // Borrado físico: eliminamos todo el documento
-      const delRes = await collection.deleteOne(filter);
-      if (delRes.deletedCount === 0) {
-        throw new Error("No se pudo eliminar físicamente la simulación");
-      }
-      return { message: "Simulación eliminada físicamente" };
-    } else {
-      // Borrado lógico: seteamos flags y push al historial
-      const updateOps = {
-        $set: {
-          "DETAIL_ROW.0.ACTIVED": false,
-          "DETAIL_ROW.0.DELETED": true,
-        },
-        $push: {
-          "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry
+          if (borrado === "fisic") {
+            // Borrado físico: eliminamos todo el documento
+            const delRes = await collection.deleteOne(filter);
+            if (delRes.deletedCount === 0) {
+              throw new Error("No se pudo eliminar físicamente la simulación");
+            }
+            return { message: "Simulación eliminada físicamente" };
+          } else {
+            // Borrado lógico: seteamos flags y push al historial
+            await collection.updateOne(filter, {
+              $set: { "DETAIL_ROW.0.DETAIL_ROW_REG.$[].CURRENT": false },
+            });
+
+            const updRes = await collection.updateOne(filter, {
+              $set: {
+                "DETAIL_ROW.0.ACTIVED": false,
+                "DETAIL_ROW.0.DELETED": true,
+              },
+              $push: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry,
+              },
+            });
+
+            if (updRes.modifiedCount === 0) {
+              throw new Error("No se pudo marcar como eliminada la simulación");
+            }
+            return { message: "Simulación marcada como eliminada lógicamente" };
+          }
+        } catch (error) {
+          console.error(
+            "Error al eliminar simulación:",
+            error.message || error
+          );
+          throw {
+            code: 400,
+            message: error.message || "Error al eliminar simulación",
+            "@Common.numericSeverity": 4,
+          };
         }
-      };
-
-      const updRes = await collection.updateOne(filter, updateOps);
-      if (updRes.modifiedCount === 0) {
-        throw new Error("No se pudo marcar como eliminada la simulación");
-      }
-      return { message: "Simulación marcada como eliminada lógicamente" };
-    }
-  } catch (error) {
-    console.error("Error al eliminar simulación:", error.message || error);
-    throw {
-      code: 400,
-      message: error.message || "Error al eliminar simulación",
-      "@Common.numericSeverity": 4,
-    };
-  }
-
 
       case "post":
         try {
@@ -527,7 +536,7 @@ case "delete":
         try {
           const { id } = req?.req?.query || {};
           const simulation = req?.data?.simulation;
-
+          const idUser = "USER_TEST";
           if (!id) {
             throw new Error(
               "Se debe proporcionar el ID de la simulación a actualizar en query (param 'id')."
@@ -540,35 +549,53 @@ case "delete":
             );
           }
 
-          const result = await mongoose.connection
-            .collection("SIMULATION")
-            .findOneAndUpdate(
-              { idSimulation: id },
-              {
-                $set: {
-                  simulationName: simulation.simulationName,
-                },
-              },
-              {
-                returnDocument: "after", // o "after" si estás usando MongoDB v4.2+
-              }
-            );
-
-          console.log(result, result.value);
-          // Si no se encontró documento
-          if (!result) {
-            // return plano, sin anidar para evitar que lo envuelvan doblemente
+          const collection = mongoose.connection.collection("SIMULATION");
+          const existing = await collection.findOne({ idSimulation: id });
+          if (!existing) {
             return {
               "@odata.context": "$metadata#entsimulation",
               message: `No existe simulación con ID ${id}`,
             };
           }
 
-          // Solo regresa una vez la estructura deseada, sin value adicional
+          const regEntry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: idUser,
+          };
+
+          await collection.updateOne(
+            { idSimulation: id },
+            {
+              $set: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG.$[].CURRENT": false,
+              },
+            }
+          );
+
+          // 2. Setear nuevo nombre y agregar nueva entrada de auditoría
+          const updRes = await collection.updateOne(
+            { idSimulation: id },
+            {
+              $set: {
+                simulationName: simulation.simulationName,
+              },
+              $push: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry,
+              },
+            }
+          );
+
+          if (updRes.modifiedCount === 0) {
+            throw new Error("No se pudo actualizar la simulación");
+          }
+
+          const updatedDoc = await collection.findOne({ idSimulation: id });
           return {
             "@odata.context": "$metadata#entsimulation",
             message: "Nombre de simulación actualizado exitosamente.",
-            simulation: result.value,
+            simulation: updatedDoc,
           };
         } catch (err) {
           console.error("Error al actualizar simulación:", err.message || err);
@@ -700,91 +727,97 @@ async function crudStrategies(req) {
           );
         }
 
-case "delete":
-  try {
-    const { id, borrado } = req?.req?.query || {};
-    const idUser = "USER_TEST";
+      case "delete":
+        try {
+          const { id, borrado } = req?.req?.query || {};
+          const idUser = "USER_TEST";
 
-    // 1) Validación
-    if (!id) {
-      return req.error(400, "Se debe proporcionar el ID de la estrategia en query (param 'id').");
-    }
-
-    const collection = mongoose.connection.collection("STRATEGIES");
-    const filter = { ID: id };
-
-    // 2) Buscar documento
-    let existing = await collection.findOne(filter);
-    if (!existing) {
-      return req.error(404, `No se encontró estrategia con ID '${id}'.`);
-    }
-
-    // 3) Inicializar DETAIL_ROW si no existe
-    if (!existing.DETAIL_ROW) {
-      await collection.updateOne(
-        filter,
-        { $set: {
-            DETAIL_ROW: {
-              ACTIVED: true,
-              DELETED: false,
-              DETAIL_ROW_REG: []
-            }
+          // 1) Validación
+          if (!id) {
+            return req.error(
+              400,
+              "Se debe proporcionar el ID de la estrategia en query (param 'id')."
+            );
           }
-        }
-      );
-      existing = await collection.findOne(filter);  // recarga con DETAIL_ROW inicializado
-    }
+
+          const collection = mongoose.connection.collection("STRATEGIES");
+          const filter = { ID: id };
+
+          // 2) Buscar documento
+          let existing = await collection.findOne(filter);
+          if (!existing) {
+            return req.error(404, `No se encontró estrategia con ID '${id}'.`);
+          }
+
+          // 3) Inicializar DETAIL_ROW si no existe
+          if (!existing.DETAIL_ROW) {
+            await collection.updateOne(filter, {
+              $set: {
+                DETAIL_ROW: {
+                  ACTIVED: true,
+                  DELETED: false,
+                  DETAIL_ROW_REG: [],
+                },
+              },
+            });
+            existing = await collection.findOne(filter); 
+          }
+
+          const regEntry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: idUser,
+          };
 
 
-    // 5) Preparamos la entrada de auditoría
-    const regEntry = {
-      CURRENT: true,
-      REGDATE: new Date(),
-      REGTIME: new Date(),
-      REGUSER: idUser,
-    };
-
-    // 6) Borrado físico vs lógico
-    if (borrado === "fisic") {
-      // — Borrado físico real —
-      const delRes = await collection.deleteOne(filter);
-      if (delRes.deletedCount === 0) {
-        throw new Error("No se pudo eliminar físicamente la estrategia");
-      }
-      return { message: `Estrategia con ID '${id}' eliminada físicamente.` };
-    } else {
-      // — Borrado lógico: flags + auditoría —
-          // 4) Comprobar estado previo
-    const dr = existing.DETAIL_ROW;
-    if (dr.DELETED === true && dr.ACTIVED === false) {
-      return req.error(400, "La estrategia ya fue eliminada lógicamente anteriormente.");
-    }
+          if (borrado === "fisic") {
+            const delRes = await collection.deleteOne(filter);
+            if (delRes.deletedCount === 0) {
+              throw new Error("No se pudo eliminar físicamente la estrategia");
+            }
+            return {
+              message: `Estrategia con ID '${id}' eliminada físicamente.`,
+            };
+          } else {
     
-      const updateOps = {
-        $set: {
-          "DETAIL_ROW.ACTIVED": false,
-          "DETAIL_ROW.DELETED": true
-        },
-        $push: {
-          "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+            const dr = existing.DETAIL_ROW;
+            if (dr.DELETED === true && dr.ACTIVED === false) {
+              return req.error(
+                400,
+                "La estrategia ya fue eliminada lógicamente anteriormente."
+              );
+            }
+
+            await collection.updateOne(filter, {
+              $set: { "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false }
+            });
+
+            const updRes = await collection.updateOne(filter, {
+              $set: {
+                "DETAIL_ROW.ACTIVED": false,
+                "DETAIL_ROW.DELETED": true,
+              },
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": regEntry,
+              }
+            });
+
+            if (updRes.modifiedCount === 0) {
+              throw new Error("No se pudo marcar como eliminada la estrategia");
+            }
+
+            return {
+              message: `Estrategia con ID '${id}' marcada como eliminada lógicamente.`,
+            };
+          }
+        } catch (error) {
+          console.error("Error en deleteStrategy:", error.message);
+          return req.error(
+            500,
+            `Error al eliminar estrategia: ${error.message}`
+          );
         }
-      };
-      const updRes = await collection.updateOne(filter, updateOps);
-      if (updRes.modifiedCount === 0) {
-        throw new Error("No se pudo marcar como eliminada la estrategia");
-      }
-
-      // Traer el doc actualizado para devolverlo
-      const updated = await collection.findOne(filter);
-      return {
-        message: `Estrategia con ID '${id}' marcada como eliminada lógicamente.`
-      };
-    }
-
-  } catch (error) {
-    console.error("Error en deleteStrategy:", error.message);
-    return req.error(500, `Error al eliminar estrategia: ${error.message}`);
-  }
 
       default:
         throw new Error(`Acción no soportada: ${action}`);
