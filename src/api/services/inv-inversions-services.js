@@ -227,7 +227,7 @@ case "delete":
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "demo";
+              const apiKey = "TU_API_KEY"; // Reemplaza con tu API key
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data["Time Series (Daily)"];
@@ -239,6 +239,7 @@ case "delete":
               }
 
               const smaPeriod = 5;
+              const rsiPeriod = 14;
               const bufferDays = Math.max(smaPeriod, rsiPeriod);
 
               const allDatesSorted = Object.keys(optionsData).sort(
@@ -306,6 +307,8 @@ case "delete":
               let cash = parseFloat(initial_investment);
               let totalBoughtUnits = 0;
               let totalSoldUnits = 0;
+              const boughtPrices = [];
+              let totalRealProfit = 0; // Ganancia real acumulada
 
               const pricesHistory = [];
 
@@ -339,6 +342,9 @@ case "delete":
                   unitsHeldAfter: null,
                   spent: 0,
                   earned: 0,
+                  purchasePrice: null,
+                  sellingPrice: null,
+                  realProfit: 0, // Ganancia real del día
                 };
 
                 if (price < sma * 0.98 && cash > 0) {
@@ -348,6 +354,7 @@ case "delete":
                   unitsHeld += unitsToBuy;
                   cash -= spent;
                   totalBoughtUnits += unitsToBuy;
+                  boughtPrices.push({ date, price, units: unitsToBuy });
 
                   dailySignal.signal = "COMPRA";
                   dailySignal.reasoning = `El precio está por debajo del 98% del SMA. RSI: ${rsi.toFixed(
@@ -358,12 +365,41 @@ case "delete":
                   ).toFixed(2)}`;
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
                   dailySignal.spent = parseFloat(spent.toFixed(2));
+                  dailySignal.purchasePrice = parseFloat(price.toFixed(2));
                 } else if (price > sma * 1.02 && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
                   const revenue = unitsToSell * price;
                   cash += revenue;
                   unitsHeld -= unitsToSell;
                   totalSoldUnits += unitsToSell;
+
+                  let soldUnitsCounter = unitsToSell;
+                  let purchasePricesForSale = [];
+                  for (
+                    let j = 0;
+                    j < boughtPrices.length && soldUnitsCounter > 0;
+                    j++
+                  ) {
+                    const purchase = boughtPrices[j];
+                    if (purchase.units <= soldUnitsCounter) {
+                      purchasePricesForSale.push(purchase.price);
+                      soldUnitsCounter -= purchase.units;
+                      boughtPrices.splice(j, 1);
+                      j--;
+                    } else {
+                      purchasePricesForSale.push(purchase.price);
+                      boughtPrices[j].units -= soldUnitsCounter;
+                      soldUnitsCounter = 0;
+                    }
+                  }
+                  const averagePurchasePrice =
+                    purchasePricesForSale.reduce(
+                      (sum, price) => sum + price,
+                      0
+                    ) / purchasePricesForSale.length;
+                  const realProfit =
+                    (price - averagePurchasePrice) * unitsToSell; // Calcular ganancia real
+                  totalRealProfit += realProfit; // Acumular ganancia real
 
                   dailySignal.signal = "VENTA";
                   dailySignal.reasoning = `El precio está por encima del 102% del SMA. RSI: ${rsi.toFixed(
@@ -374,6 +410,11 @@ case "delete":
                   ).toFixed(2)}`;
                   dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
                   dailySignal.earned = parseFloat(revenue.toFixed(2));
+                  dailySignal.purchasePrice = parseFloat(
+                    averagePurchasePrice.toFixed(2)
+                  );
+                  dailySignal.sellingPrice = parseFloat(price.toFixed(2));
+                  dailySignal.realProfit = parseFloat(realProfit.toFixed(2)); // Agregar ganancia real al objeto
                 }
 
                 dailySignal.cashAfter = parseFloat(cash.toFixed(2));
@@ -427,6 +468,7 @@ case "delete":
                   finalCash: parseFloat(cash.toFixed(2)),
                   finalValue: parseFloat(finalValue.toFixed(2)),
                   finalBalance: parseFloat(finalBalance.toFixed(2)),
+                  realProfit: parseFloat(totalRealProfit.toFixed(2)), // Agregar ganancia real al resumen
                 },
                 signals,
                 historicalPrices: pricesHistory,
