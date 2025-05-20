@@ -678,7 +678,7 @@ async function DeleteRecord(req) {
     // Función genérica para simular eliminación (actualización de flags)
     const deleteFromCollection = async (collection, fieldName, value) => {
       const filter = { [fieldName]: value };
-
+ 
       const existingDoc = await mongoose.connection
         .collection(collection)
         .findOne(filter);
@@ -692,20 +692,30 @@ async function DeleteRecord(req) {
       const deletedStatus = existingDoc.DETAIL_ROW?.DELETED;
       const activeStatus = existingDoc.DETAIL_ROW?.ACTIVED;
 
-      // Verificación de estado previo para evitar eliminar nuevamente
-      if (
-        borrado === "fisic" &&
-        deletedStatus === true &&
-        activeStatus === false
-      ) {
-        throw new Error(
-          `El registro en la colección ${collection} ya fue eliminado físicamente anteriormente`
-        );
-      }
 
+     // Construimos el registro de auditoría
+      const regEntry = {
+        CURRENT: true,
+        REGDATE: new Date(),
+        REGTIME: new Date(),
+        REGUSER: "USER_TEST",        
+      };
+
+      if (borrado === "fisic") {
+        // Borrado físico
+        const result = await mongoose.connection
+          .collection(collection)
+          .deleteOne(filter);
+        if (result.deletedCount === 0) {
+          throw new Error(
+            `No se pudo eliminar físicamente el registro en ${collection}`
+          );
+        }
+        return { message: `Registro eliminado físicamente de ${collection}` };
+      } else {
+              // Verificación de estado previo para evitar eliminar nuevamente
       if (
-        borrado !== "fisic" &&
-        deletedStatus === false &&
+        deletedStatus === true &&
         activeStatus === false
       ) {
         throw new Error(
@@ -713,35 +723,39 @@ async function DeleteRecord(req) {
         );
       }
 
-      // Asignar flags de acuerdo con el tipo de borrado
-      const updateFields =
-        borrado === "fisic"
-          ? {
-              "DETAIL_ROW.ACTIVED": false,
-              "DETAIL_ROW.DELETED": true,
-            }
-          : {
-              "DETAIL_ROW.ACTIVED": false,
-              "DETAIL_ROW.DELETED": false,
-            };
-
-      const result = await mongoose.connection
+        await mongoose.connection
         .collection(collection)
-        .updateOne(filter, { $set: updateFields });
-
-      if (result.modifiedCount === 0) {
-        throw new Error(
-          `No se pudo actualizar el registro en la colección ${collection}`
+        .updateOne(
+          filter,
+          {
+            $set: {
+              "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false
+            }
+          }
         );
+        const result = await mongoose.connection
+          .collection(collection)
+          .updateOne(
+            filter,
+            {
+              $set: {
+                "DETAIL_ROW.ACTIVED": false,
+                "DETAIL_ROW.DELETED": true
+              },
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+              }
+            }
+          );
+        if (result.modifiedCount === 0) {
+          throw new Error(
+            `No se pudo actualizar el registro en la colección ${collection}`
+          );
+        }
+        return {
+          message: `Registro marcado como eliminado lógicamente en ${collection}`
+        };
       }
-
-      return {
-        message: `Registro marcado como ${
-          borrado === "fisic"
-            ? "eliminado físicamente"
-            : "eliminado lógicamente"
-        } en la colección ${collection}`,
-      };
     };
 
     // Verificar y aplicar eliminación
@@ -790,34 +804,19 @@ async function CrudValues(req) {
               ])
               .toArray();
           } else if (labelid && !valueid) {
-            // Caso 2: Solo hay labelid
+            // Caso 2: Filtrar por LABELID -> Traer solo los registros con ese LABELID
             result = await mongoose.connection
-              .collection("ZTLABELS")
+              .collection("ZTVALUES")
               .aggregate([
                 {
-                  $match: { LABELID: labelid },
-                },
-                {
-                  $lookup: {
-                    from: "ZTVALUES",
-                    localField: "LABELID",
-                    foreignField: "LABELID",
-                    as: "VALUES",
-                  },
-                },
-                {
-                  $addFields: {
-                    VALUES: {
-                      $filter: {
-                        input: "$VALUES",
-                        as: "val",
-                        cond: { $eq: ["$$val.DETAIL_ROW.ACTIVED", true] },
-                      },
-                    },
+                  $match: {
+                    LABELID: labelid,
+                    "DETAIL_ROW.ACTIVED": true, // Solo traer registros activos
                   },
                 },
               ])
               .toArray();
+
           } else if (labelid && valueid) {
             // Caso 3: Hay labelid y valueid
             result = await mongoose.connection
@@ -1468,9 +1467,212 @@ async function CrudRoles(req) {
   }
 }
 
+async function CrudLabels(req) {
+  try {
+    const action = req.req.query.action;
+
+    if (!action) {
+      throw new Error("El parámetro 'action' es obligatorio.");
+    }
+
+    switch (action) {
+      case "get":
+        try {
+          const labelid = req?.req?.query?.labelid;
+
+          let result;
+
+          if (!labelid) {
+            // Obtener todos los labels activos
+            result = await mongoose.connection
+              .collection("ZTLABELS")
+              .aggregate([
+                {
+                  $match: {
+                    "DETAIL_ROW.ACTIVED": true, // Filtra los labels activos
+                  },
+                },
+              ])
+              .toArray();
+          } else {
+            // Obtener un label específico con sus datos
+            result = await mongoose.connection
+              .collection("ZTLABELS")
+              .aggregate([
+                {
+                  $match: { LABELID: labelid },
+                },
+              ])
+              .toArray();
+          }
+
+          return result;
+        } catch (error) {
+          console.error("Error en la agregación de labels:", error.message);
+          throw error;
+        }
+
+      case "create":
+        try {
+          const {
+            COMPANYID,
+            CEDIID,
+            LABELID,
+            LABEL,
+            INDEX,
+            COLLECTION,
+            SECTION,
+            SEQUENCE,
+            IMAGE,
+            DESCRIPTION,
+            ACTIVED = true,
+            DELETED = false,
+            reguser,
+          } = req?.req?.body?.labels;
+
+          const currentDate = new Date();
+
+          const detailRowReg = [
+            {
+              CURRENT: false,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser,
+            },
+            {
+              CURRENT: true,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser,
+            },
+          ];
+
+          const newZTLabel = {
+            COMPANYID,
+            CEDIID,
+            LABELID: LABELID || "",
+            LABEL: LABEL || "",
+            INDEX: INDEX || "",
+            COLLECTION: COLLECTION || "",
+            SECTION: SECTION || "",
+            SEQUENCE: SEQUENCE || 0,
+            IMAGE: IMAGE || "",
+            DESCRIPTION: DESCRIPTION || "",
+            DETAIL_ROW: {
+              ACTIVED,
+              DELETED,
+              DETAIL_ROW_REG: detailRowReg,
+            },
+          };
+
+          const result = await mongoose.connection
+            .collection("ZTLABELS")
+            .insertOne(newZTLabel);
+
+          return {
+            message: "ZTLabel creado exitosamente",
+            ztlabelId: newZTLabel,
+          };
+        } catch (error) {
+          throw new Error(error.message);
+        }
+
+      case "update":
+        try {
+          const { labelid } = req?.req?.query;
+
+          if (!labelid) {
+            throw new Error(
+              "El parámetro LABELID es obligatorio para realizar la actualización."
+            );
+          }
+
+          const {
+            LABEL,
+            INDEX,
+            COLLECTION,
+            SECTION,
+            SEQUENCE,
+            IMAGE,
+            DESCRIPTION,
+            ACTIVED,
+            DELETED,
+            reguser,
+          } = req?.req?.body?.labels || {};
+
+          const currentDate = new Date();
+
+          const existingRecord = await mongoose.connection
+            .collection("ZTLABELS")
+            .findOne({ LABELID: labelid });
+
+          if (!existingRecord) {
+            throw new Error(
+              `No se encontró un registro con el LABELID: ${labelid}`
+            );
+          }
+
+          const updateFields = {};
+          if (LABEL) updateFields.LABEL = LABEL;
+          if (INDEX) updateFields.INDEX = INDEX;
+          if (COLLECTION) updateFields.COLLECTION = COLLECTION;
+          if (SECTION) updateFields.SECTION = SECTION;
+          if (SEQUENCE !== undefined) updateFields.SEQUENCE = SEQUENCE;
+          if (IMAGE) updateFields.IMAGE = IMAGE;
+          if (DESCRIPTION) updateFields.DESCRIPTION = DESCRIPTION;
+          if (ACTIVED !== undefined)
+            updateFields["DETAIL_ROW.ACTIVED"] = ACTIVED;
+          if (DELETED !== undefined)
+            updateFields["DETAIL_ROW.DELETED"] = DELETED;
+
+          updateFields["DETAIL_ROW_REG"] = [
+            {
+              CURRENT: false,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser || "",
+            },
+            {
+              CURRENT: true,
+              REGDATE: currentDate,
+              REGTIME: currentDate,
+              REGUSER: reguser || "",
+            },
+          ];
+
+          const result = await mongoose.connection
+            .collection("ZTLABELS")
+            .updateOne({ LABELID: labelid }, { $set: updateFields });
+
+          if (result.modifiedCount === 0) {
+            throw new Error(
+              "No se encontró el registro con el LABELID proporcionado o no se realizó la actualización."
+            );
+          }
+
+          return {
+            message: "ZTLabel actualizado exitosamente",
+            updatedFields: updateFields,
+          };
+        } catch (error) {
+          throw new Error(error.message);
+        }
+
+      default:
+        throw new Error(
+          "Acción no válida. Las acciones permitidas son: get, create y update."
+        );
+    }
+  } catch (error) {
+    console.error("Error en CrudLabels:", error.message);
+    throw new Error(error.message);
+  }
+}
+
 module.exports = {
   DeleteRecord,
   CrudUsers,
   CrudValues,
   CrudRoles,
+  CrudLabels,
 };

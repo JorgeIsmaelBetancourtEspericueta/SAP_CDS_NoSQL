@@ -139,7 +139,9 @@ async function crudSimulation(req) {
       case "delete":
         try {
           const { id, borrado } = req?.req?.query || {};
+          const idUser = "USER_TEST";
 
+          // Validación
           if (!id) {
             throw new Error(
               "Se debe proporcionar el ID de la simulación a eliminar"
@@ -147,50 +149,68 @@ async function crudSimulation(req) {
           }
 
           const filter = { idSimulation: id };
+          const collection = mongoose.connection.collection("SIMULATION");
+
+          // Comprobar existencia
+          const existing = await collection.findOne(filter);
+          if (!existing) {
+            throw new Error(`No existe simulación con idSimulation=${id}`);
+          }
+
+          // Comprobar estado previo
+          const dr = existing.DETAIL_ROW;
+          if (dr?.DELETED === true && dr?.ACTIVED === false) {
+            throw new Error(
+              "La simulación ya fue eliminada lógicamente anteriormente"
+            );
+          }
+
+          // Registro de auditoría
+          const regEntry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: idUser,
+          };
 
           if (borrado === "fisic") {
-            const existing = await mongoose.connection
-              .collection("SIMULATION")
-              .findOne(filter);
-            console.log("🔍 Documento encontrado:", existing);
-            if (!existing) {
-              throw new Error(`No existe simulación con idSimulation=${id}`);
+            // Borrado físico: eliminamos todo el documento
+            const delRes = await collection.deleteOne(filter);
+            if (delRes.deletedCount === 0) {
+              throw new Error("No se pudo eliminar físicamente la simulación");
             }
-            // Eliminación física
-            const updateFields = {
-              "DETAIL_ROW.$[].ACTIVED": false,
-              "DETAIL_ROW.$[].DELETED": true,
-            };
-
-            const result = await mongoose.connection
-              .collection("SIMULATION")
-              .updateOne(filter, { $set: updateFields });
-            console.log("🔍 [DEBUG] Resultado de updateOne:", result);
-            if (result.modifiedCount === 0) {
-              throw new Error("No se pudo marcar como eliminada la simulación");
-            }
-
-            return { message: "Simulación marcada como eliminada físicamente" };
+            return { message: "Simulación eliminada físicamente" };
           } else {
-            // Eliminación lógica
-            const updateFields = {
-              "DETAIL_ROW.$[].ACTIVED": false,
-              "DETAIL_ROW.$[].DELETED": false,
-            };
+            // Borrado lógico: seteamos flags y push al historial
+            await collection.updateOne(filter, {
+              $set: { "DETAIL_ROW.0.DETAIL_ROW_REG.$[].CURRENT": false },
+            });
 
-            const result = await mongoose.connection
-              .collection("SIMULATION")
-              .updateOne(filter, { $set: updateFields });
+            const updRes = await collection.updateOne(filter, {
+              $set: {
+                "DETAIL_ROW.0.ACTIVED": false,
+                "DETAIL_ROW.0.DELETED": true,
+              },
+              $push: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry,
+              },
+            });
 
-            if (result.modifiedCount === 0) {
+            if (updRes.modifiedCount === 0) {
               throw new Error("No se pudo marcar como eliminada la simulación");
             }
-
             return { message: "Simulación marcada como eliminada lógicamente" };
           }
         } catch (error) {
-          console.error("Error al eliminar simulación:", error);
-          throw new Error("Error al eliminar simulación");
+          console.error(
+            "Error al eliminar simulación:",
+            error.message || error
+          );
+          throw {
+            code: 400,
+            message: error.message || "Error al eliminar simulación",
+            "@Common.numericSeverity": 4,
+          };
         }
 
       case "post":
@@ -221,7 +241,7 @@ async function crudSimulation(req) {
 
           switch (simulationName) {
             case "ReversionSimple":
-              const apiKey = "demo";
+              const apiKey = "demo"; // Reemplaza con tu API key
               const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=full&apikey=${apiKey}`;
               const response = await axios.get(apiUrl);
               const optionsData = response.data["Time Series (Daily)"];
@@ -233,6 +253,7 @@ async function crudSimulation(req) {
               }
 
               const smaPeriod = 5;
+              const rsiPeriod = 14;
               const bufferDays = Math.max(smaPeriod, rsiPeriod);
 
               const allDatesSorted = Object.keys(optionsData).sort(
@@ -300,8 +321,11 @@ async function crudSimulation(req) {
               let cash = parseFloat(initial_investment);
               let totalBoughtUnits = 0;
               let totalSoldUnits = 0;
+              const boughtPrices = [];
+              let totalRealProfit = 0; // Ganancia real acumulada
 
               const pricesHistory = [];
+              const chartData = []; // Inicializamos el array para chart_data
 
               for (let i = 0; i < filteredPrices.length; i++) {
                 const {
@@ -333,6 +357,9 @@ async function crudSimulation(req) {
                   unitsHeldAfter: null,
                   spent: 0,
                   earned: 0,
+                  purchasePrice: null,
+                  sellingPrice: null,
+                  realProfit: 0, // Ganancia real del día
                 };
 
                 if (price < sma * 0.98 && cash > 0) {
@@ -342,6 +369,7 @@ async function crudSimulation(req) {
                   unitsHeld += unitsToBuy;
                   cash -= spent;
                   totalBoughtUnits += unitsToBuy;
+                  boughtPrices.push({ date, price, units: unitsToBuy });
 
                   dailySignal.signal = "COMPRA";
                   dailySignal.reasoning = `El precio está por debajo del 98% del SMA. RSI: ${rsi.toFixed(
@@ -352,12 +380,41 @@ async function crudSimulation(req) {
                   ).toFixed(2)}`;
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
                   dailySignal.spent = parseFloat(spent.toFixed(2));
+                  dailySignal.purchasePrice = parseFloat(price.toFixed(2));
                 } else if (price > sma * 1.02 && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
                   const revenue = unitsToSell * price;
                   cash += revenue;
                   unitsHeld -= unitsToSell;
                   totalSoldUnits += unitsToSell;
+
+                  let soldUnitsCounter = unitsToSell;
+                  let purchasePricesForSale = [];
+                  for (
+                    let j = 0;
+                    j < boughtPrices.length && soldUnitsCounter > 0;
+                    j++
+                  ) {
+                    const purchase = boughtPrices[j];
+                    if (purchase.units <= soldUnitsCounter) {
+                      purchasePricesForSale.push(purchase.price);
+                      soldUnitsCounter -= purchase.units;
+                      boughtPrices.splice(j, 1);
+                      j--;
+                    } else {
+                      purchasePricesForSale.push(purchase.price);
+                      boughtPrices[j].units -= soldUnitsCounter;
+                      soldUnitsCounter = 0;
+                    }
+                  }
+                  const averagePurchasePrice =
+                    purchasePricesForSale.reduce(
+                      (sum, price) => sum + price,
+                      0
+                    ) / purchasePricesForSale.length;
+                  const realProfit =
+                    (price - averagePurchasePrice) * unitsToSell; // Calcular ganancia real
+                  totalRealProfit += realProfit; // Acumular ganancia real
 
                   dailySignal.signal = "VENTA";
                   dailySignal.reasoning = `El precio está por encima del 102% del SMA. RSI: ${rsi.toFixed(
@@ -368,6 +425,11 @@ async function crudSimulation(req) {
                   ).toFixed(2)}`;
                   dailySignal.unitsSold = parseFloat(unitsToSell.toFixed(4));
                   dailySignal.earned = parseFloat(revenue.toFixed(2));
+                  dailySignal.purchasePrice = parseFloat(
+                    averagePurchasePrice.toFixed(2)
+                  );
+                  dailySignal.sellingPrice = parseFloat(price.toFixed(2));
+                  dailySignal.realProfit = parseFloat(realProfit.toFixed(2)); // Agregar ganancia real al objeto
                 }
 
                 dailySignal.cashAfter = parseFloat(cash.toFixed(2));
@@ -375,19 +437,32 @@ async function crudSimulation(req) {
                 signals.push(dailySignal);
 
                 pricesHistory.push({
-                  date,
-                  open,
-                  high,
-                  low,
-                  close: price,
-                  volume,
-                  indicators:
+                  Date: date,
+                  Open: open,
+                  High: high,
+                  Low: low,
+                  Close: price,
+                  Volume: volume,
+                  Indicators:
                     sma !== null && rsi !== null
                       ? `SMA: ${sma.toFixed(2)}, RSI: ${rsi.toFixed(2)}`
                       : "",
-                  signal: dailySignal.signal || "",
-                  rules: dailySignal.reasoning || "",
-                  shares: parseFloat(unitsHeld.toFixed(4)),
+                  Signal: dailySignal.signal || "",
+                  Rules: dailySignal.reasoning || "",
+                  Shares: parseFloat(unitsHeld.toFixed(4)),
+                });
+
+                // Agregamos los datos para chart_data, excluyendo "Indicators", "Signals" y "Rules"
+                // Agregamos los datos para chart_data, incluyendo el valor del SMA
+                chartData.push({
+                  Date: date,
+                  Open: open,
+                  High: high,
+                  Low: low,
+                  Close: price,
+                  Volume: volume,
+                  Shares: parseFloat(unitsHeld.toFixed(4)),
+                  SMA: sma !== null ? parseFloat(sma.toFixed(2)) : null, // Aquí agregamos el SMA
                 });
               }
 
@@ -421,9 +496,11 @@ async function crudSimulation(req) {
                   finalCash: parseFloat(cash.toFixed(2)),
                   finalValue: parseFloat(finalValue.toFixed(2)),
                   finalBalance: parseFloat(finalBalance.toFixed(2)),
+                  realProfit: parseFloat(totalRealProfit.toFixed(2)), // Agregar ganancia real al resumen
                 },
                 signals,
                 historicalPrices: pricesHistory,
+                chart_data: chartData, // Agregamos el subarreglo chart_data aquí
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
@@ -479,7 +556,7 @@ async function crudSimulation(req) {
         try {
           const { id } = req?.req?.query || {};
           const simulation = req?.data?.simulation;
-
+          const idUser = "USER_TEST";
           if (!id) {
             throw new Error(
               "Se debe proporcionar el ID de la simulación a actualizar en query (param 'id')."
@@ -492,35 +569,53 @@ async function crudSimulation(req) {
             );
           }
 
-          const result = await mongoose.connection
-            .collection("SIMULATION")
-            .findOneAndUpdate(
-              { idSimulation: id },
-              {
-                $set: {
-                  simulationName: simulation.simulationName,
-                },
-              },
-              {
-                returnDocument: "after", // o "after" si estás usando MongoDB v4.2+
-              }
-            );
-
-          console.log(result, result.value);
-          // Si no se encontró documento
-          if (!result) {
-            // return plano, sin anidar para evitar que lo envuelvan doblemente
+          const collection = mongoose.connection.collection("SIMULATION");
+          const existing = await collection.findOne({ idSimulation: id });
+          if (!existing) {
             return {
               "@odata.context": "$metadata#entsimulation",
               message: `No existe simulación con ID ${id}`,
             };
           }
 
-          // Solo regresa una vez la estructura deseada, sin value adicional
+          const regEntry = {
+            CURRENT: true,
+            REGDATE: new Date(),
+            REGTIME: new Date(),
+            REGUSER: idUser,
+          };
+
+          await collection.updateOne(
+            { idSimulation: id },
+            {
+              $set: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG.$[].CURRENT": false,
+              },
+            }
+          );
+
+          // 2. Setear nuevo nombre y agregar nueva entrada de auditoría
+          const updRes = await collection.updateOne(
+            { idSimulation: id },
+            {
+              $set: {
+                simulationName: simulation.simulationName,
+              },
+              $push: {
+                "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry,
+              },
+            }
+          );
+
+          if (updRes.modifiedCount === 0) {
+            throw new Error("No se pudo actualizar la simulación");
+          }
+
+          const updatedDoc = await collection.findOne({ idSimulation: id });
           return {
             "@odata.context": "$metadata#entsimulation",
             message: "Nombre de simulación actualizado exitosamente.",
-            simulation: result.value,
+            simulation: updatedDoc,
           };
         } catch (err) {
           console.error("Error al actualizar simulación:", err.message || err);
@@ -655,7 +750,9 @@ async function crudStrategies(req) {
       case "delete":
         try {
           const { id, borrado } = req?.req?.query || {};
+          const idUser = "USER_TEST";
 
+          // 1) Validación
           if (!id) {
             return req.error(
               400,
@@ -663,46 +760,77 @@ async function crudStrategies(req) {
             );
           }
 
-          const strategy = await Strategy.findOne({ ID: id });
+          const collection = mongoose.connection.collection("STRATEGIES");
+          const filter = { ID: id };
 
-          if (!strategy) {
+          // 2) Buscar documento
+          let existing = await collection.findOne(filter);
+          if (!existing) {
             return req.error(404, `No se encontró estrategia con ID '${id}'.`);
           }
 
-          // Estructura base de DETAIL_ROW si no existe
-          strategy.DETAIL_ROW = strategy.DETAIL_ROW || {
-            ACTIVED: true,
-            DELETED: false,
-            DETAIL_ROW_REG: [],
-          };
-
-          // Marcar eliminación según el tipo
-          if (borrado === "fisic") {
-            // Borrado físico
-            strategy.DETAIL_ROW.ACTIVED = false;
-            strategy.DETAIL_ROW.DELETED = true;
-          } else {
-            // Borrado lógico
-            strategy.DETAIL_ROW.ACTIVED = false;
-            strategy.DETAIL_ROW.DELETED = false;
+          // 3) Inicializar DETAIL_ROW si no existe
+          if (!existing.DETAIL_ROW) {
+            await collection.updateOne(filter, {
+              $set: {
+                DETAIL_ROW: {
+                  ACTIVED: true,
+                  DELETED: false,
+                  DETAIL_ROW_REG: [],
+                },
+              },
+            });
+            existing = await collection.findOne(filter); 
           }
 
-          // Registrar cambio
-          strategy.DETAIL_ROW.DETAIL_ROW_REG.push({
+          const regEntry = {
             CURRENT: true,
             REGDATE: new Date(),
             REGTIME: new Date(),
-            REGUSER: "FIBARRAC",
-          });
-
-          await strategy.save();
-
-          return {
-            message: `Estrategia con ID '${id}' marcada como eliminada ${
-              borrado === "fisic" ? "físicamente" : "lógicamente"
-            }.`,
-            strategy: strategy.toObject(),
+            REGUSER: idUser,
           };
+
+
+          if (borrado === "fisic") {
+            const delRes = await collection.deleteOne(filter);
+            if (delRes.deletedCount === 0) {
+              throw new Error("No se pudo eliminar físicamente la estrategia");
+            }
+            return {
+              message: `Estrategia con ID '${id}' eliminada físicamente.`,
+            };
+          } else {
+    
+            const dr = existing.DETAIL_ROW;
+            if (dr.DELETED === true && dr.ACTIVED === false) {
+              return req.error(
+                400,
+                "La estrategia ya fue eliminada lógicamente anteriormente."
+              );
+            }
+
+            await collection.updateOne(filter, {
+              $set: { "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false }
+            });
+
+            const updRes = await collection.updateOne(filter, {
+              $set: {
+                "DETAIL_ROW.ACTIVED": false,
+                "DETAIL_ROW.DELETED": true,
+              },
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": regEntry,
+              }
+            });
+
+            if (updRes.modifiedCount === 0) {
+              throw new Error("No se pudo marcar como eliminada la estrategia");
+            }
+
+            return {
+              message: `Estrategia con ID '${id}' marcada como eliminada lógicamente.`,
+            };
+          }
         } catch (error) {
           console.error("Error en deleteStrategy:", error.message);
           return req.error(

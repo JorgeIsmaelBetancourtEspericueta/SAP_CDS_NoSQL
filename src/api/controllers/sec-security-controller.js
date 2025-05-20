@@ -6,6 +6,7 @@ const {
   CrudUsers,
   CrudValues,
   CrudRoles,
+  CrudLabels,
 } = require("../services/sec-security-service");
 
 // Principal structure controller class
@@ -33,6 +34,14 @@ class InversionsClass extends cds.ApplicationService {
         return await CrudRoles(req);
       } catch (error) {
         req.error(400, error.message || "Error en crudRoles");
+      }
+    });
+
+    this.on("crudLabels", async (req) => {
+      try {
+        return await CrudLabels(req);
+      } catch (error) {
+        req.error(400, error.message || "Error en crudLabels");
       }
     });
 
