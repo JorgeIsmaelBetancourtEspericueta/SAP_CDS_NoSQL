@@ -14,11 +14,6 @@ yarn-error.log
 *.njsproj
 *.sln
 
-# Archivos de entorno y secretos
-.env
-.env.local
-.env.*.local
-
 # Artefactos de build (si usas cds build)
 gen/
 build/

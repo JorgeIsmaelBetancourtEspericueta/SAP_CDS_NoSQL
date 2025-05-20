@@ -1,89 +1,6 @@
 const mongoose = require("mongoose");
 const axios = require("axios");
 
-async function indicators(req) {
-  try {
-    const { symbol, indicator, interval, month } = req?.req?.query || {};
-    if (!symbol || !indicator || !interval) {
-      throw new Error(
-        "Faltan parámetros requeridos: 'symbol', 'indicator', 'interval'."
-      );
-    }
-    // Conectar a la base de datos para buscar si el indicador ya existe
-    const existingIndicator = await mongoose.connection
-      .collection("INDICATORS")
-      .findOne({ SYMBOL: symbol, INDICATOR: indicator, INTERVAL: interval });
-
-    // Si existe lo retornamos
-    if (existingIndicator) {
-      return {
-        indicator: existingIndicator,
-      };
-    }
-    const Ainterval =
-      interval === "1d"
-        ? "daily"
-        : interval === "1w"
-        ? "weekly"
-        : interval === "1m"
-        ? "monthly"
-        : interval;
-    // Si no existe, obtenemos los datos de la API de Alpha Vantage
-    const apiKey = "NB6JDC9T7TRK4KM8";
-    const apiUrl = `https://www.alphavantage.co/query?function=${indicator}&symbol=${symbol}&interval=${Ainterval}&time_period=20&series_type=close&apikey=${apiKey}`;
-    console.log("API URL:", apiUrl);
-    const response = await axios.get(apiUrl);
-
-    // Verificamos si la API devolvió datos válidos
-    if (
-      !response.data ||
-      response.data["Note"] ||
-      response.data["Error Message"]
-    ) {
-      throw new Error(
-        response.data["Note"] ||
-          response.data["Error Message"] ||
-          "Error al obtener datos de la API."
-      );
-    }
-
-    // Procesar los datos de la API
-    const indicatorData = response.data["Technical Analysis: SMA"];
-    if (!indicatorData) {
-      throw new Error(
-        "No se encontraron datos técnicos en la respuesta de la API."
-      );
-    }
-
-    // Damos formato a los datos para ingresar el array de fechas y valores
-    const formattedData = Object.entries(indicatorData).map(
-      ([date, values]) => ({
-        DATE: date,
-        VALUE: values["SMA"],
-      })
-    );
-
-    const newIndicator = {
-      SYMBOL: symbol,
-      INDICATOR: indicator,
-      INTERVAL: interval,
-      TIMEZONE: response.data["Meta Data"]["7: Time Zone"],
-      DATA: formattedData,
-    };
-
-    // Insertar los datos en la colección
-    await mongoose.connection.collection("INDICATORS").insertOne(newIndicator);
-
-    return {
-      message: "Indicador obtenido de la API y almacenado en la base de datos.",
-      data: newIndicator,
-    };
-  } catch (error) {
-    console.error("Error en getIndicator:", error.message);
-    return req.error(500, `Error al obtener indicador: ${error.message}`);
-  }
-}
-
 async function crudSimulation(req) {
   try {
     const action = req.req.query.action;
@@ -919,6 +836,5 @@ module.exports = {
   crudStrategies,
   company,
   strategy,
-  indicators,
   priceshistory,
 };
