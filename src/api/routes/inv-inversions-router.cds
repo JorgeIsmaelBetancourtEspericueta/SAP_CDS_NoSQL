@@ -38,7 +38,7 @@ service PricesHistoryRouter @(path: '/api/inv') {
 
     //GET para strategies
     @path: 'strategy'
-    action strategy(strategy : entstrategies)       returns array of entstrategies;
+    function strategy(strategy : entstrategies)       returns array of entstrategies;
 
     //GET para strategies
     @path: 'priceshistory'

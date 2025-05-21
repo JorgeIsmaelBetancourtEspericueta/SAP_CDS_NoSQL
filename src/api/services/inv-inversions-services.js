@@ -809,27 +809,22 @@ async function strategy(req) {
   const Strategy = require("../models/mongoDB/Strategy.js");
 
   try {
-    // Buscar todas las estrategias activas y no eliminadas
-    const strategies = await Strategy.find({
-      "DETAIL_ROW.ACTIVED": true,
-      "DETAIL_ROW.DELETED": false,
-    });
+    // Buscar todas las estrategias sin aplicar filtros
+    const strategies = await Strategy.find();
 
     // Si no se encuentran estrategias, enviar un error 404
     if (strategies.length === 0) {
-      return req.error(
-        404,
-        "No se encontraron estrategias activas y no eliminadas."
-      );
+      return req.error(404, "No se encontraron estrategias.");
     }
 
-    // Si hay estrategias, devolverlas en formato objeto
+    // Devolver todas las estrategias como objetos
     return strategies.map((s) => s.toObject());
   } catch (error) {
     console.error("Error en getStrategy:", error.message);
     return req.error(500, `Error al obtener estrategias: ${error.message}`);
   }
 }
+
 
 module.exports = {
   crudSimulation,
