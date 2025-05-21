@@ -216,7 +216,7 @@ async function crudSimulation(req) {
             simulationName,
             startDate,
             endDate,
-            rsiPeriod = 14,
+            rsiPeriod: rsiPeriodFromQuery, // Renombrar para evitar conflicto con la variable local
           } = req?.req?.query || {};
 
           if (
@@ -248,7 +248,8 @@ async function crudSimulation(req) {
               }
 
               const smaPeriod = 5;
-              const rsiPeriod = 14;
+              // Establecer dinámicamente rsiPeriod, por defecto a 14 si no se proporciona o es inválido
+              const rsiPeriod = parseInt(rsiPeriodFromQuery) || 14;
               const bufferDays = Math.max(smaPeriod, rsiPeriod);
 
               const allDatesSorted = Object.keys(optionsData).sort(
@@ -318,6 +319,8 @@ async function crudSimulation(req) {
               let totalSoldUnits = 0;
               const boughtPrices = [];
               let totalRealProfit = 0; // Ganancia real acumulada
+              // Inicializamos el subdocumento para la última operación como un objeto vacío
+              let lastOperation = {};
 
               const pricesHistory = [];
               const chartData = []; // Inicializamos el array para chart_data
@@ -376,6 +379,13 @@ async function crudSimulation(req) {
                   dailySignal.unitsBought = parseFloat(unitsToBuy.toFixed(4));
                   dailySignal.spent = parseFloat(spent.toFixed(2));
                   dailySignal.purchasePrice = parseFloat(price.toFixed(2));
+
+                  // Actualizar lastOperation
+                  lastOperation = {
+                    type: "COMPRA",
+                    price: parseFloat(price.toFixed(2)),
+                    reasoning: dailySignal.reasoning,
+                  };
                 } else if (price > sma * 1.02 && unitsHeld > 0) {
                   const unitsToSell = unitsHeld * 0.25;
                   const revenue = unitsToSell * price;
@@ -425,6 +435,13 @@ async function crudSimulation(req) {
                   );
                   dailySignal.sellingPrice = parseFloat(price.toFixed(2));
                   dailySignal.realProfit = parseFloat(realProfit.toFixed(2)); // Agregar ganancia real al objeto
+
+                  // Actualizar lastOperation
+                  lastOperation = {
+                    type: "VENTA",
+                    price: parseFloat(price.toFixed(2)),
+                    reasoning: dailySignal.reasoning,
+                  };
                 }
 
                 dailySignal.cashAfter = parseFloat(cash.toFixed(2));
@@ -447,7 +464,6 @@ async function crudSimulation(req) {
                   Shares: parseFloat(unitsHeld.toFixed(4)),
                 });
 
-                // Agregamos los datos para chart_data, excluyendo "Indicators", "Signals" y "Rules"
                 // Agregamos los datos para chart_data, incluyendo el valor del SMA
                 chartData.push({
                   Date: date,
@@ -496,6 +512,7 @@ async function crudSimulation(req) {
                 signals,
                 historicalPrices: pricesHistory,
                 chart_data: chartData, // Agregamos el subarreglo chart_data aquí
+                lastOperation: lastOperation, // Agregamos el subdocumento de la última operación
                 DETAIL_ROW: [
                   {
                     ACTIVED: true,
@@ -511,6 +528,7 @@ async function crudSimulation(req) {
                   },
                 ],
               };
+
 
               await mongoose.connection
                 .collection("SIMULATION")
@@ -775,7 +793,7 @@ async function crudStrategies(req) {
                 },
               },
             });
-            existing = await collection.findOne(filter); 
+            existing = await collection.findOne(filter);
           }
 
           const regEntry = {
@@ -784,7 +802,6 @@ async function crudStrategies(req) {
             REGTIME: new Date(),
             REGUSER: idUser,
           };
-
 
           if (borrado === "fisic") {
             const delRes = await collection.deleteOne(filter);
@@ -795,7 +812,6 @@ async function crudStrategies(req) {
               message: `Estrategia con ID '${id}' eliminada físicamente.`,
             };
           } else {
-    
             const dr = existing.DETAIL_ROW;
             if (dr.DELETED === true && dr.ACTIVED === false) {
               return req.error(
@@ -805,7 +821,7 @@ async function crudStrategies(req) {
             }
 
             await collection.updateOne(filter, {
-              $set: { "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false }
+              $set: { "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false },
             });
 
             const updRes = await collection.updateOne(filter, {
@@ -815,7 +831,7 @@ async function crudStrategies(req) {
               },
               $push: {
                 "DETAIL_ROW.DETAIL_ROW_REG": regEntry,
-              }
+              },
             });
 
             if (updRes.modifiedCount === 0) {
