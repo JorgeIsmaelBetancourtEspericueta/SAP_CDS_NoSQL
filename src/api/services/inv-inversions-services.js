@@ -1,89 +1,6 @@
 const mongoose = require("mongoose");
 const axios = require("axios");
 
-async function indicators(req) {
-  try {
-    const { symbol, indicator, interval, month } = req?.req?.query || {};
-    if (!symbol || !indicator || !interval) {
-      throw new Error(
-        "Faltan parámetros requeridos: 'symbol', 'indicator', 'interval'."
-      );
-    }
-    // Conectar a la base de datos para buscar si el indicador ya existe
-    const existingIndicator = await mongoose.connection
-      .collection("INDICATORS")
-      .findOne({ SYMBOL: symbol, INDICATOR: indicator, INTERVAL: interval });
-
-    // Si existe lo retornamos
-    if (existingIndicator) {
-      return {
-        indicator: existingIndicator,
-      };
-    }
-    const Ainterval =
-      interval === "1d"
-        ? "daily"
-        : interval === "1w"
-        ? "weekly"
-        : interval === "1m"
-        ? "monthly"
-        : interval;
-    // Si no existe, obtenemos los datos de la API de Alpha Vantage
-    const apiKey = "NB6JDC9T7TRK4KM8";
-    const apiUrl = `https://www.alphavantage.co/query?function=${indicator}&symbol=${symbol}&interval=${Ainterval}&time_period=20&series_type=close&apikey=${apiKey}`;
-    console.log("API URL:", apiUrl);
-    const response = await axios.get(apiUrl);
-
-    // Verificamos si la API devolvió datos válidos
-    if (
-      !response.data ||
-      response.data["Note"] ||
-      response.data["Error Message"]
-    ) {
-      throw new Error(
-        response.data["Note"] ||
-          response.data["Error Message"] ||
-          "Error al obtener datos de la API."
-      );
-    }
-
-    // Procesar los datos de la API
-    const indicatorData = response.data["Technical Analysis: SMA"];
-    if (!indicatorData) {
-      throw new Error(
-        "No se encontraron datos técnicos en la respuesta de la API."
-      );
-    }
-
-    // Damos formato a los datos para ingresar el array de fechas y valores
-    const formattedData = Object.entries(indicatorData).map(
-      ([date, values]) => ({
-        DATE: date,
-        VALUE: values["SMA"],
-      })
-    );
-
-    const newIndicator = {
-      SYMBOL: symbol,
-      INDICATOR: indicator,
-      INTERVAL: interval,
-      TIMEZONE: response.data["Meta Data"]["7: Time Zone"],
-      DATA: formattedData,
-    };
-
-    // Insertar los datos en la colección
-    await mongoose.connection.collection("INDICATORS").insertOne(newIndicator);
-
-    return {
-      message: "Indicador obtenido de la API y almacenado en la base de datos.",
-      data: newIndicator,
-    };
-  } catch (error) {
-    console.error("Error en getIndicator:", error.message);
-    return req.error(500, `Error al obtener indicador: ${error.message}`);
-  }
-}
-
 async function crudSimulation(req) {
   try {
     const action = req.req.query.action;
@@ -96,9 +13,10 @@ async function crudSimulation(req) {
       case "get":
         try {
           let result;
+
           const simulationId = req?.req?.query?.idSimulation;
-          const strategie = req?.req?.query?.strategie;
-          const strategieid = req?.req?.query?.id;
+          const simulation = req?.req?.query?.simulationName;
+          const strategieid = req?.req?.query?.idStrategy;
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
@@ -108,23 +26,27 @@ async function crudSimulation(req) {
               .collection("SIMULATION")
               .find({ ...baseFilter, idSimulation: simulationId })
               .toArray();
-          } else if (strategie) {
+              console.log("1")
+          } else if (simulation) {
             result = await mongoose.connection
               .collection("SIMULATION")
-              .find({ ...baseFilter, STRATEGY_NAME: strategie })
+              .find({ ...baseFilter, simulationName: simulation })
               .toArray();
+              console.log("2")
           } else if (strategieid) {
             result = await mongoose.connection
               .collection("SIMULATION")
-              .find({ ...baseFilter, SIMULATION_ID: strategieid })
+              .find({ ...baseFilter, idStrategy: strategieid })
               .toArray();
+              console.log("3")
           } else {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find(baseFilter)
               .toArray();
+              console.log("4")
           }
-
+          
           return result;
         } catch (error) {
           console.error("Error al obtener simulaciones:", error);
@@ -903,21 +825,15 @@ async function strategy(req) {
   const Strategy = require("../models/mongoDB/Strategy.js");
 
   try {
-    // Buscar todas las estrategias activas y no eliminadas
-    const strategies = await Strategy.find({
-      "DETAIL_ROW.ACTIVED": true,
-      "DETAIL_ROW.DELETED": false,
-    });
+    // Buscar todas las estrategias sin aplicar filtros
+    const strategies = await Strategy.find();
 
     // Si no se encuentran estrategias, enviar un error 404
     if (strategies.length === 0) {
-      return req.error(
-        404,
-        "No se encontraron estrategias activas y no eliminadas."
-      );
+      return req.error(404, "No se encontraron estrategias.");
     }
 
-    // Si hay estrategias, devolverlas en formato objeto
+    // Devolver todas las estrategias como objetos
     return strategies.map((s) => s.toObject());
   } catch (error) {
     console.error("Error en getStrategy:", error.message);
@@ -925,11 +841,11 @@ async function strategy(req) {
   }
 }
 
+
 module.exports = {
   crudSimulation,
   crudStrategies,
   company,
   strategy,
-  indicators,
   priceshistory,
 };

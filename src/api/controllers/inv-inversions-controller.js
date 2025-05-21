@@ -7,7 +7,6 @@ const {
   crudStrategies,
   company,
   strategy,
-  indicators,
   priceshistory
 } = require("../services/inv-inversions-services");
 
@@ -48,15 +47,6 @@ class InversionsClass extends cds.ApplicationService {
         req.error(400, error.message || "Error en strategy");
       }
     });
-
-    this.on("indicators", async (req) => {
-      try {
-        return await indicators(req);
-      } catch (error) {
-        req.error(400, error.message || "Error en indicators");
-      }
-    } );
-
 
      this.on("priceshistory", async (req) => {
       try {
