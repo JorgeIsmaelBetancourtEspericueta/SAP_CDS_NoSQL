@@ -13,10 +13,13 @@ async function crudSimulation(req) {
       case "get":
         try {
           let result;
-
-          const simulationId = req?.req?.query?.idSimulation;
-          const simulation = req?.req?.query?.simulationName;
-          const strategieid = req?.req?.query?.idStrategy;
+                    const simulationId  = req?.req?.query?.idSimulation;
+                    const simulation    = req?.req?.query?.simulationName;
+                    const strategieid   = req?.req?.query?.idStrategy;
+                    const symbol        = req?.req?.query?.symbol;
+                    const startDate     = req?.req?.query?.startDate;
+                    const endDate       = req?.req?.query?.endDate;
+                    const finalBalanceMin = req?.req?.query?.finalBalance;
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
@@ -38,8 +41,50 @@ async function crudSimulation(req) {
               .collection("SIMULATION")
               .find({ ...baseFilter, idStrategy: strategieid })
               .toArray();
-              console.log("3")
-          } else {
+           
+
+           } else if (symbol) {
+            result = await mongoose.connection
+              .collection("SIMULATION")
+              .find({ ...baseFilter, symbol: symbol })
+              .toArray();
+
+           }else if (simulationId) {
+           const pipeline = [
+            {
+            $match: {
+             "DETAIL_ROW.ACTIVED": true,
+             idSimulation: simulationId
+             }},{
+             $project: {
+             idSimulation: 1,
+              idUser: 1,
+              idStrategy: 1,
+             simulationName: 1,
+             symbol: 1,
+             startDate: 1,
+           endDate: 1,
+            amount: 1,
+            specs: 1,
+           result: 1,
+            percentageReturn: 1,
+           summary: 1,
+           DETAIL_ROW: 1,
+            signals: {
+           $filter: {
+            input: "$signals",
+            as: "signal",
+            cond: {
+              $and: [
+                { $gte: ["$$signal.date", "$startDate"] },
+                { $lte: ["$$signal.date", "$endDate"] }
+              ]}}}}}];
+
+         result = await mongoose.connection
+         .collection("SIMULATION")
+         .aggregate(pipeline)
+         .toArray();
+            }else {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find(baseFilter)
