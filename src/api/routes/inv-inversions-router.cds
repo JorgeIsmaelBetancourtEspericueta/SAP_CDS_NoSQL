@@ -34,14 +34,11 @@ service PricesHistoryRouter @(path: '/api/inv') {
 
     //GET para company
     @path: 'company'
-    action company(company : entcompany)              returns array of entcompany;
+    function company(company : entcompany)              returns array of entcompany;
 
     //GET para strategies
     @path: 'strategy'
-    action strategy(strategy : entstrategies)       returns array of entstrategies;
-
-    @path: 'indicators'
-    action indicators(indicator : entindicators)     returns array of entindicators;
+    function strategy(strategy : entstrategies)       returns array of entstrategies;
 
     //GET para strategies
     @path: 'priceshistory'
