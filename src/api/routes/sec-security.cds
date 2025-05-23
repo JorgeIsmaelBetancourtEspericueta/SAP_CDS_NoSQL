@@ -40,4 +40,6 @@ service securityRouter @(path: '/api/security') {
     @path            : 'crudLabels'
     action crudLabels(labels : entlabels) returns array of entlabels;
 
+    
+
 };
