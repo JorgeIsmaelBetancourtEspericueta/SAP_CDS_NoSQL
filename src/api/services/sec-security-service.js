@@ -232,6 +232,8 @@ async function CrudUsers(req) {
                     EXTENSION: "$USER.EXTENSION",
                     DEPARTMENT: "$USER.DEPARTMENT",
                     FUNCTION: "$USER.FUNCTION",
+                    AVATAR: "$USER.AVATAR",
+                    BALANCE: "$USER.BALANCE",
                     STREET: "$USER.STREET",
                     POSTALCODE: "$USER.POSTALCODE",
                     CITY: "$USER.CITY",
@@ -379,6 +381,7 @@ async function CrudUsers(req) {
                     _id: "$USERID",
                     USERNAME: { $first: "$USERNAME" },
                     EMAIL: { $first: "$EMAIL" },
+                    PASSWORD: { $first: "$PASSWORD" },
                     ROLES: {
                       $push: {
                         ROLEID: "$ROLES.ROLEID",
@@ -394,8 +397,22 @@ async function CrudUsers(req) {
                 },
               ])
               .toArray();
+              //Verificar contraseña es correcta
+              /*
+              const passwordIngresada = '1234e';
+              console.log(`Password ingresada: ${passwordIngresada}`);
+              if (passwordIngresada && result.length > 0) {
+                const bcrypt = require("bcrypt");
+                const hashAlmacenado = result[0].PASSWORD;
+                const isMatch = await bcrypt.compare(passwordIngresada, hashAlmacenado);
+                console.log(`¿Password correcta? ${isMatch}`);
+                // Puedes agregar el resultado al objeto de respuesta para pruebas:
+                result[0].passwordCorrecta = isMatch;
+              }*/
+              
+              
           }
-
+          
           return result;
         } catch (error) {
           throw new Error(error.message);
@@ -404,19 +421,22 @@ async function CrudUsers(req) {
         try {
           const {
             USERID,
+            PASSWORD,
             USERNAME,
             ALIAS,
             FIRSTNAME,
             LASTNAME,
+            EMAIL,
+            EXTENSION,
+            PHONENUMBER,
             BIRTHDAYDATE,
+            EMPLOYEEID,
             COMPANYID,
             COMPANYNAME,
             COMPANYALIAS,
             CEDIID,
-            EMPLOYEEID,
-            EMAIL,
-            PHONENUMBER,
-            EXTENSION,
+            AVATAR,
+            BALANCE,
             DEPARTMENT,
             FUNCTION,
             STREET,
@@ -475,11 +495,12 @@ async function CrudUsers(req) {
               missingRoles,
             };
           }
-
+        
           // Crear el nuevo objeto de usuario
           const newUser = {
             USERID,
             USERNAME,
+            PASSWORD,
             ALIAS: ALIAS || "",
             FIRSTNAME,
             LASTNAME,
@@ -494,6 +515,8 @@ async function CrudUsers(req) {
             EXTENSION: EXTENSION || "",
             DEPARTMENT: DEPARTMENT || "",
             FUNCTION: FUNCTION || "",
+            AVATAR: AVATAR || "",
+            BALANCE: BALANCE || 0,
             STREET: STREET || "",
             POSTALCODE: POSTALCODE || "",
             CITY: CITY || "",
