@@ -882,10 +882,33 @@ async function CrudValues(req) {
           throw error;
         }
 
-     case "create":
-  try {
+<<<<<<< HEAD
+      case "create":
+        try {
+          console.log("Datos recibidos por el backend:", JSON.stringify(req?.req?.body, null, 2));
+          const {
+            COMPANYID,
+            CEDIID,
+            LABELID,
+            VALUEPAID,
+            VALUEID,
+            VALUE,
+            ALIAS,
+            SEQUENCE,
+            IMAGE,
+            VALUESAPID,
+            DESCRIPTION,
+            ROUTE,
+            ACTIVED = true,
+            DELETED = false,
+            reguser,
+          } = req?.req?.body?.values;
+=======
+  //    case "create":
+  // try {
     const valuesArray = req?.req?.body?.values;
     const currentDate = new Date();
+>>>>>>> 02c2b1274f2ccc8529e17a8fd2d5350e859425da
 
     if (!Array.isArray(valuesArray) || valuesArray.length === 0) {
       throw new Error("Se debe proporcionar un arreglo de valores en 'values'.");
@@ -1026,6 +1049,8 @@ async function CrudValues(req) {
 
           // Desestructuración de las propiedades del body
           const {
+            COMPANYID,
+            CEDIID,
             LABELID,
             VALUEPAID,
             VALUE,
@@ -1106,6 +1131,8 @@ async function CrudValues(req) {
 
           // Construcción dinámica del objeto de actualización
           const updateFields = {};
+          if (COMPANYID) updateFields.COMPANYID = COMPANYID;
+          if (CEDIID) updateFields.CEDIID = CEDIID;
           if (LABELID) updateFields.LABELID = LABELID;
           if (VALUEPAID) updateFields.VALUEPAID = VALUEPAID;
           if (VALUE) updateFields.VALUE = VALUE;
@@ -1517,13 +1544,7 @@ async function CrudLabels(req) {
             // Obtener todos los labels activos
             result = await mongoose.connection
               .collection("ZTLABELS")
-              .aggregate([
-                {
-                  $match: {
-                    "DETAIL_ROW.ACTIVED": true, // Filtra los labels activos
-                  },
-                },
-              ])
+              .aggregate([])
               .toArray();
           } else {
             // Obtener un label específico con sus datos
@@ -1546,8 +1567,8 @@ async function CrudLabels(req) {
       case "create":
         try {
           const {
-            COMPANYID,
-            CEDIID,
+            COMPANYID = 0,
+            CEDIID = 0,
             LABELID,
             LABEL,
             INDEX,
@@ -1556,8 +1577,12 @@ async function CrudLabels(req) {
             SEQUENCE,
             IMAGE,
             DESCRIPTION,
-            ACTIVED = true,
-            DELETED = false,
+            DETAIL_ROW: [
+              {
+                ACTIVED,
+                DELETED = false,
+              }
+            ],
             reguser,
           } = req?.req?.body?.labels;
 
@@ -1619,6 +1644,8 @@ async function CrudLabels(req) {
           }
 
           const {
+            COMPANYID,
+            CEDIID,
             LABEL,
             INDEX,
             COLLECTION,
@@ -1644,6 +1671,8 @@ async function CrudLabels(req) {
           }
 
           const updateFields = {};
+          if (COMPANYID) updateFields.COMPANYID = COMPANYID;
+          if (CEDIID) updateFields.CEDIID = CEDIID;
           if (LABEL) updateFields.LABEL = LABEL;
           if (INDEX) updateFields.INDEX = INDEX;
           if (COLLECTION) updateFields.COLLECTION = COLLECTION;
