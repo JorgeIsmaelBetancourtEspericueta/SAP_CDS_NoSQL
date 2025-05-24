@@ -13,14 +13,12 @@ async function crudSimulation(req) {
       case "get":
         try {
           let result;
-                    const simulationId  = req?.req?.query?.idSimulation;
-                    const simulation    = req?.req?.query?.simulationName;
-                    const strategieid   = req?.req?.query?.idStrategy;
-                    const symbol        = req?.req?.query?.symbol;
-                    //
-                    const minBalance = Number(req.req.query.minBalance); // el valor que pasa el usuario
-
-                     
+          const simulationId = req?.req?.query?.idSimulation;
+          const simulation = req?.req?.query?.simulationName;
+          const strategieid = req?.req?.query?.idStrategy;
+          const symbol = req?.req?.query?.symbol;
+          //
+          const minBalance = Number(req.req.query.minBalance); // el valor que pasa el usuario
 
           const baseFilter = { "DETAIL_ROW.ACTIVED": true };
 
@@ -30,43 +28,35 @@ async function crudSimulation(req) {
               .collection("SIMULATION")
               .find({ ...baseFilter, idSimulation: simulationId })
               .toArray();
-              console.log("1")
-
-
+            console.log("1");
           } else if (simulation) {
-        result = await mongoose.connection
-          .collection("SIMULATION")
-          .find({
-            ...baseFilter,
-            simulationName: { $regex: simulation, $options: "i" } 
-          })
-          .toArray();
-
-
+            result = await mongoose.connection
+              .collection("SIMULATION")
+              .find({
+                ...baseFilter,
+                simulationName: { $regex: simulation, $options: "i" },
+              })
+              .toArray();
           } else if (strategieid) {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find({ ...baseFilter, idStrategy: strategieid })
               .toArray();
-           
-
-         } else if (minBalance) {
-             result = await mongoose.connection
-                 .collection("SIMULATION")
-                 .find({
-                 ...baseFilter,
-               "summary.finalBalance": { $gt: Number(minBalance) }
+          } else if (minBalance) {
+            result = await mongoose.connection
+              .collection("SIMULATION")
+              .find({
+                ...baseFilter,
+                "summary.finalBalance": { $gt: Number(minBalance) },
               })
               .toArray();
-          }
-           
-          else if (symbol) {
+          } else if (symbol) {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find({ ...baseFilter, symbol: symbol })
               .toArray();
 
-         /* } else if (simulationId) {
+            /* } else if (simulationId) {
             const queryStartDateParam = req?.req?.query?.startDate;
             const queryEndDateParam = req?.req?.query?.endDate;
  const pipeline = [
@@ -112,7 +102,7 @@ async function crudSimulation(req) {
         .aggregate(pipeline)
         .toArray();
 */
-    }else {
+          } else {
             result = await mongoose.connection
               .collection("SIMULATION")
               .find(baseFilter)
@@ -915,7 +905,6 @@ async function strategy(req) {
 
 // REVERSION_SIMPLE - La lógica de tu estrategia original, ahora como una función separada
 async function reversionSimple(req) {
-  
   console.log(req);
 
   try {
@@ -934,7 +923,7 @@ async function reversionSimple(req) {
     // si el entorno no soporta Node.js crypto module directamente.
     const generateSimulationId = (symbol) => {
       const date = new Date();
-      const timestamp = date.toISOString().replace(/[^0-9]/g, ''); // Formato YYYYMMDDTHHMMSSsssZ
+      const timestamp = date.toISOString().replace(/[^0-9]/g, ""); // Formato YYYYMMDDTHHMMSSsssZ
       const random = Math.floor(Math.random() * 10000);
       return `${symbol}_${timestamp}_${random}`;
     };
@@ -945,8 +934,12 @@ async function reversionSimple(req) {
 
     // Extracción de los períodos para RSI y SMA de las especificaciones, con valores por defecto.
     // CORRECCIÓN: Usar 'INDICATOR' en lugar de 'KEY' para encontrar los indicadores.
-    const RSI_INDICATOR = SPECS?.find((IND) => IND.INDICATOR?.toLowerCase() === "rsi");
-    const SMA_INDICATOR = SPECS?.find((IND) => IND.INDICATOR?.toLowerCase() === "sma");
+    const RSI_INDICATOR = SPECS?.find(
+      (IND) => IND.INDICATOR?.toLowerCase() === "rsi"
+    );
+    const SMA_INDICATOR = SPECS?.find(
+      (IND) => IND.INDICATOR?.toLowerCase() === "sma"
+    );
 
     const RSI_PERIOD = parseInt(RSI_INDICATOR?.VALUE) || 14;
     const SMA_PERIOD = parseInt(SMA_INDICATOR?.VALUE) || 5;
@@ -1181,8 +1174,8 @@ async function reversionSimple(req) {
         VOLUME: parseFloat(VOLUME.toFixed(0)), // Volumen como entero
         INDICATORS: [
           { INDICATOR: "sma", VALUE: parseFloat((SMA ?? 0).toFixed(2)) },
-          { INDICATOR: "rsi", VALUE: parseFloat((RSI ?? 0).toFixed(2)) }
-        ]
+          { INDICATOR: "rsi", VALUE: parseFloat((RSI ?? 0).toFixed(2)) },
+        ],
       });
     }
 
@@ -1190,12 +1183,13 @@ async function reversionSimple(req) {
     let FINAL_VALUE = 0;
     const lastPriceData = FILTERED_PRICES[FILTERED_PRICES.length - 1];
     if (lastPriceData && UNITS_HELD > 0) {
-        FINAL_VALUE = UNITS_HELD * lastPriceData.CLOSE; // Usar el precio de cierre del último día
+      FINAL_VALUE = UNITS_HELD * lastPriceData.CLOSE; // Usar el precio de cierre del último día
     }
 
     // Calcula el balance final y el porcentaje de retorno.
     const FINAL_BALANCE_CALCULATED = CASH + FINAL_VALUE;
-    const PERCENTAGE_RETURN = ((FINAL_BALANCE_CALCULATED - AMOUNT) / AMOUNT) * 100;
+    const PERCENTAGE_RETURN =
+      ((FINAL_BALANCE_CALCULATED - AMOUNT) / AMOUNT) * 100;
 
     // Objeto SUMMARY con los cálculos finales.
     const SUMMARY = {
@@ -1206,7 +1200,7 @@ async function reversionSimple(req) {
       FINAL_VALUE: parseFloat(FINAL_VALUE.toFixed(2)),
       FINAL_BALANCE: parseFloat(FINAL_BALANCE_CALCULATED.toFixed(2)),
       REAL_PROFIT: parseFloat(REAL_PROFIT.toFixed(2)),
-      PERCENTAGE_RETURN: parseFloat(PERCENTAGE_RETURN.toFixed(2))
+      PERCENTAGE_RETURN: parseFloat(PERCENTAGE_RETURN.toFixed(2)),
     };
 
     // Objeto DETAIL_ROW (información de registro).
@@ -1218,22 +1212,21 @@ async function reversionSimple(req) {
           {
             CURRENT: true,
             REGDATE: new Date().toISOString().slice(0, 10), // Fecha actual YYYY-MM-DD
-            REGTIME: new Date().toLocaleTimeString('es-ES', { hour12: false }), // Hora actual HH:MM:SS
-            REGUSER: USERID // Usuario de la solicitud
-          }
-        ]
-      }
+            REGTIME: new Date().toLocaleTimeString("es-ES", { hour12: false }), // Hora actual HH:MM:SS
+            REGUSER: USERID, // Usuario de la solicitud
+          },
+        ],
+      },
     ];
 
     // Retorna los resultados finales de la simulación con la nueva estructura.
-    return {
+
+    const simulation = {
       SIMULATIONID,
       USERID,
       STRATEGYID,
       SIMULATIONNAME,
       SYMBOL,
-      // CORRECCIÓN: Ahora 'INDICATORS' es un objeto con una propiedad 'value'
-      // que contiene el arreglo original de 'SPECS' de la solicitud.
       INDICATORS: { value: SPECS },
       AMOUNT: parseFloat(AMOUNT.toFixed(2)),
       STARTDATE,
@@ -1241,7 +1234,24 @@ async function reversionSimple(req) {
       SIGNALS,
       SUMMARY,
       CHART_DATA: NEW_CHART_DATA,
-      DETAIL_ROW
+      DETAIL_ROW,
+    };
+
+    await mongoose.connection.collection("SIMULATION").insertOne(simulation);
+    return {
+      SIMULATIONID,
+      USERID,
+      STRATEGYID,
+      SIMULATIONNAME,
+      SYMBOL,
+      INDICATORS: { value: SPECS },
+      AMOUNT: parseFloat(AMOUNT.toFixed(2)),
+      STARTDATE,
+      ENDDATE,
+      SIGNALS,
+      SUMMARY,
+      CHART_DATA: NEW_CHART_DATA,
+      DETAIL_ROW,
     };
   } catch (ERROR) {
     // Manejo de errores, imprime el mensaje de error y lo relanza.
