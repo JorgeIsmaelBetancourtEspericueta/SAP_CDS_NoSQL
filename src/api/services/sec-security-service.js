@@ -859,7 +859,6 @@ async function CrudValues(req) {
           throw error;
         }
 
-<<<<<<< HEAD
       case "create":
         try {
           console.log("Datos recibidos por el backend:", JSON.stringify(req?.req?.body, null, 2));
@@ -880,12 +879,6 @@ async function CrudValues(req) {
             DELETED = false,
             reguser,
           } = req?.req?.body?.values;
-=======
-  //    case "create":
-  // try {
-    const valuesArray = req?.req?.body?.values;
-    const currentDate = new Date();
->>>>>>> 02c2b1274f2ccc8529e17a8fd2d5350e859425da
 
     if (!Array.isArray(valuesArray) || valuesArray.length === 0) {
       throw new Error("Se debe proporcionar un arreglo de valores en 'values'.");
