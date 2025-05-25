@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const axios = require("axios");
 const SimulationModel = require("../models/mongodb/simulations");
-const API_KEY = "NU1IF336TN4IBMS5";
+const API_KEY = "demo";
+const APIKEY = "demo"
 
 async function crudSimulation(req) {
   try {
@@ -948,7 +949,6 @@ async function reversionSimple(req) {
 
     // Configuración de la API de Alpha Vantage.
     // Asegúrate de tener 'axios' importado en tu entorno (ej. const axios = require('axios'); o import axios from 'axios';)
-    const APIKEY = "demo"; // Clave API de demostración, considera usar una clave real y segura para producción.
     const APIURL = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${SYMBOL}&outputsize=full&apikey=${APIKEY}`;
 
     // Realiza la solicitud HTTP para obtener datos históricos.
@@ -1092,11 +1092,11 @@ async function reversionSimple(req) {
       // Compra si el precio está significativamente por debajo del SMA y hay efectivo disponible.
       if (PRICE < SMA * 0.98 && CASH > 0) {
         const INVESTMENT_AMOUNT = CASH * 0.5; // Invierte el 50% del efectivo disponible
-        UNITS_TRANSACTED = INVESTMENT_AMOUNT / PRICE;
+        UNITS_TRANSACTED = parseFloat((INVESTMENT_AMOUNT / PRICE).toFixed(10)); // Precisión para unidades
         const SPENT = UNITS_TRANSACTED * PRICE;
-        UNITS_HELD += UNITS_TRANSACTED;
+        UNITS_HELD = parseFloat((UNITS_HELD + UNITS_TRANSACTED).toFixed(10)); // Mantener precisión
         CASH -= SPENT;
-        TOTAL_BOUGHT_UNITS += UNITS_TRANSACTED;
+        TOTAL_BOUGHT_UNITS = parseFloat((TOTAL_BOUGHT_UNITS + UNITS_TRANSACTED).toFixed(10)); // Mantener precisión
         // Registra la compra para el cálculo FIFO.
         BOUGHT_PRICES.push({ DATE, PRICE, UNITS: UNITS_TRANSACTED });
 
@@ -1108,11 +1108,11 @@ async function reversionSimple(req) {
       // Lógica de la estrategia: Señal de VENTA
       // Vende si el precio está significativamente por encima del SMA y hay unidades en posesión.
       else if (PRICE > SMA * 1.02 && UNITS_HELD > 0) {
-        const UNITS_TO_SELL = UNITS_HELD * 0.25; // Vende el 25% de las unidades en posesión
+        const UNITS_TO_SELL = parseFloat((UNITS_HELD * 0.25).toFixed(10)); // Precisión para unidades a vender
         const REVENUE = UNITS_TO_SELL * PRICE;
         CASH += REVENUE;
-        UNITS_HELD -= UNITS_TO_SELL;
-        TOTAL_SOLD_UNITS += UNITS_TO_SELL;
+        UNITS_HELD = parseFloat((UNITS_HELD - UNITS_TO_SELL).toFixed(10)); // Mantener precisión
+        TOTAL_SOLD_UNITS = parseFloat((TOTAL_SOLD_UNITS + UNITS_TO_SELL).toFixed(10)); // Mantener precisión
         UNITS_TRANSACTED = UNITS_TO_SELL;
 
         // Lógica FIFO para calcular la ganancia/pérdida real de las unidades vendidas.
@@ -1129,9 +1129,9 @@ async function reversionSimple(req) {
             SOLD_UNITS_COUNTER
           );
           COST_OF_SOLD_UNITS += UNITS_FROM_THIS_PURCHASE * PURCHASE.PRICE;
-          SOLD_UNITS_COUNTER -= UNITS_FROM_THIS_PURCHASE;
+          SOLD_UNITS_COUNTER = parseFloat((SOLD_UNITS_COUNTER - UNITS_FROM_THIS_PURCHASE).toFixed(10)); // Mantener precisión
 
-          BOUGHT_PRICES[J].UNITS -= UNITS_FROM_THIS_PURCHASE;
+          BOUGHT_PRICES[J].UNITS = parseFloat((BOUGHT_PRICES[J].UNITS - UNITS_FROM_THIS_PURCHASE).toFixed(10)); // Mantener precisión
           if (BOUGHT_PRICES[J].UNITS <= 0) {
             UNITS_REMOVED_FROM_BOUGHT.push(J); // Marca las compras agotadas para eliminación.
           }
@@ -1161,7 +1161,7 @@ async function reversionSimple(req) {
           TYPE: CURRENT_SIGNAL_TYPE,
           PRICE: parseFloat(PRICE.toFixed(2)),
           REASONING: CURRENT_REASONING,
-          SHARES: parseFloat(UNITS_TRANSACTED.toFixed(15)), // Alta precisión para las unidades
+          SHARES: parseFloat(UNITS_TRANSACTED.toFixed(10)), // Alta precisión para las unidades
           PROFIT: parseFloat(PROFIT_LOSS.toFixed(2)),
         });
       }
@@ -1261,6 +1261,7 @@ async function reversionSimple(req) {
     throw ERROR;
   }
 }
+
 
 async function simulateSupertrend(req) {
   console.log(req);
@@ -2371,7 +2372,7 @@ async function SimulateMACrossover(body) {
           currentCash = 0;
 
           return {
-            DATE: signal.date,
+            DATE: signal.date.toISOString().slice(0, 10),
             TYPE: "buy",
             PRICE: signal.price,
             REASONING: signal.reasoning,
@@ -2422,7 +2423,7 @@ async function SimulateMACrossover(body) {
 
     // Formatear datos para el gráfico
     const chartData = priceData.map((item) => ({
-      DATE: item.date,
+      DATE: item.date.toISOString().slice(0, 10),
       OPEN: item.open,
       HIGH: item.high,
       LOW: item.low,
@@ -2450,8 +2451,8 @@ async function SimulateMACrossover(body) {
       STRATEGY: "IdCM",
       SIMULATIONNAME: `MA Crossover ${shortMa}/${longMa}`,
       SYMBOL,
-      STARTDATE: new Date(STARTDATE),
-      ENDDATE: new Date(ENDDATE),
+      STARTDATE: new Date(STARTDATE).toISOString().slice(0, 10),
+      ENDDATE: new Date(ENDDATE).toISOString().slice(0, 10),
       AMOUNT,
       SIGNALS: processedSignals,
       SPECS: formattedSpecs,
@@ -2481,8 +2482,9 @@ async function SimulateMACrossover(body) {
     };
 
     // Guardar en MongoDB
-    const newSimulation = new Simulation(simulationData);
-    await newSimulation.save();
+    await mongoose.connection
+      .collection("SIMULATION")
+      .insertOne(simulationData);
 
     return simulationData;
   } catch (e) {
