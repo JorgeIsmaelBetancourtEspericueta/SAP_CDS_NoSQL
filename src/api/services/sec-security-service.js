@@ -623,6 +623,16 @@ async function CrudUsers(req) {
               .updateOne({ USERID: userid }, { $set: otherFields });
           }
 
+          // Si se recibe un array ROLES, reemplazarlo completamente
+          if (Array.isArray(users.ROLES)) {
+            await mongoose.connection
+              .collection("ZTUSERS")
+              .updateOne(
+                { USERID: userid },
+                { $set: { ROLES: users.ROLES } }
+              );
+          }
+
           // Si no se especificó roleid pero sí se quiere agregar uno nuevo
           if (!roleid && users?.ROLES?.[0]?.ROLEID) {
             const newRoleId = users.ROLES[0].ROLEID;
@@ -650,17 +660,15 @@ async function CrudUsers(req) {
               };
             }
 
-            // Agrega el nuevo rol
-            await mongoose.connection.collection("ZTUSERS").updateOne(
-              { USERID: userid },
-              {
-                $push: {
-                  ROLES: {
-                    ROLEID: newRoleData.ROLEID,
-                  },
-                },
-              }
-            );
+            // Si se recibe un array ROLES, reemplazarlo completamente
+            if (Array.isArray(users.ROLES)) {
+              await mongoose.connection
+                .collection("ZTUSERS")
+                .updateOne(
+                  { USERID: userid },
+                  { $set: { ROLES: users.ROLES } }
+                );
+            }
           }
 
           return {

@@ -8,7 +8,7 @@ entity users {
         FIRSTNAME      : String;
         LASTNAME       : String;
         BIRTHDAYDATE   : String; // Formato "DD.MM.YYYY"
-        COMPANYID      : Integer;
+        COMPANYID      : String;
         COMPANYNAME    : String;
         COMPANYALIAS   : String;
         CEDIID         : String;
