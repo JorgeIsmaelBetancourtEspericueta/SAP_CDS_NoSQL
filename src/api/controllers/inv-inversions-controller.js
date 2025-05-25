@@ -8,8 +8,10 @@ const {
   company,
   strategy,
   priceshistory,
-  simulation,
   reversionSimple,
+  simulateSupertrend,
+  SimulateMomentum,
+  SimulateMACrossover,
 } = require("../services/inv-inversions-services");
 
 //Principal structure controller class
@@ -60,9 +62,6 @@ class InversionsClass extends cds.ApplicationService {
 
     this.on("simulation", async (req) => {
       try {
-        // Extraer 'strategy' de los query params y datos del body
-        // Asegúrate de que 'req.req.query' y 'req.req.body.simulation' son las rutas correctas
-        // para acceder a estos datos en tu entorno CDS.
         const { strategy } = req?.req?.query || {};
         const body = req?.req?.body?.SIMULATION || {}; // Aquí está todo el body
 
@@ -83,17 +82,16 @@ class InversionsClass extends cds.ApplicationService {
         // Switch para manejar diferentes estrategias
         switch (strategy.toLowerCase()) {
           case "reversionsimple":
-            // Llama a la función reversionSimple con el objeto 'body' directamente.
-            // 'reversionSimple' ya devuelve un objeto JavaScript.
-            const result = await reversionSimple(body);
-            // NO uses JSON.parse(result) aquí, porque 'result' ya es un objeto.
-            // El framework se encargará de serializarlo a JSON para la respuesta HTTP.
-            return result; // <-- ¡Esta es la corrección clave!
+            return await reversionSimple(body);
 
-          // Aquí puedes agregar más estrategias en el futuro:
-          // case 'otraEstrategia':
-          //   return await otraFuncionDeEstrategia(body);
+          case "supertrend":
+            return await simulateSupertrend(body);
 
+          case "momentum":
+            return await SimulateMomentum(body);
+
+          case "macrossover":
+            return await SimulateMACrossover(body);
           default:
             throw new Error(`Estrategia no reconocida: ${strategy}`);
         }
