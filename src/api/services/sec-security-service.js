@@ -504,18 +504,18 @@ async function CrudUsers(req) {
             ALIAS: ALIAS || "",
             FIRSTNAME,
             LASTNAME,
+            EMPLOYEEID: EMPLOYEEID || "",
+            EXTENSION: EXTENSION || "",
+            PHONENUMBER: PHONENUMBER || "",
+            EMAIL,
             BIRTHDAYDATE: BIRTHDAYDATE || "",
+            AVATAR: AVATAR || "",
             COMPANYID: COMPANYID || "",
             COMPANYNAME: COMPANYNAME || "",
             COMPANYALIAS: COMPANYALIAS || "",
             CEDIID: CEDIID || "",
-            EMPLOYEEID: EMPLOYEEID || "",
-            EMAIL,
-            PHONENUMBER: PHONENUMBER || "",
-            EXTENSION: EXTENSION || "",
             DEPARTMENT: DEPARTMENT || "",
             FUNCTION: FUNCTION || "",
-            AVATAR: AVATAR || "",
             BALANCE: BALANCE || 0,
             STREET: STREET || "",
             POSTALCODE: POSTALCODE || "",
@@ -735,7 +735,31 @@ async function DeleteRecord(req) {
           );
         }
         return { message: `Registro eliminado físicamente de ${collection}` };
-      } else {
+      } else if (borrado === "activar") {
+      // Reactivar el registro
+      const result = await mongoose.connection
+        .collection(collection)
+        .updateOne(
+          filter,
+          {
+            $set: {
+              "DETAIL_ROW.ACTIVED": true,
+              "DETAIL_ROW.DELETED": false
+            },
+            $push: {
+              "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+            }
+          }
+        );
+      if (result.modifiedCount === 0) {
+        throw new Error(
+          `No se pudo activar el registro en la colección ${collection}`
+        );
+      }
+      return {
+        message: `Registro activado correctamente en ${collection}`
+      };
+    } else {
               // Verificación de estado previo para evitar eliminar nuevamente
       if (
         deletedStatus === true &&
@@ -902,6 +926,10 @@ async function CrudValues(req) {
             DELETED = false,
             reguser,
           } = req?.req?.body?.values;
+  //    case "create":
+  // try {
+    const valuesArray = req?.req?.body?.values;
+    const currentDate = new Date();
 
     if (!Array.isArray(valuesArray) || valuesArray.length === 0) {
       throw new Error("Se debe proporcionar un arreglo de valores en 'values'.");
