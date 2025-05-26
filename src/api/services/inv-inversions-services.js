@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const axios = require("axios");
 const SimulationModel = require("../models/mongodb/simulations");
 const API_KEY = "demo";
-const APIKEY = "demo"
+const APIKEY = "demo";
 
 async function crudSimulation(req) {
   try {
@@ -29,7 +29,7 @@ async function crudSimulation(req) {
             result = await mongoose.connection
 
               .collection("SIMULATION")
-              .find({ ...baseFilter, idSimulation: simulationId })
+              .find({ ...baseFilter, SIMULATIONID: simulationId })
               .toArray();
             console.log("1");
           } else if (simulation) {
@@ -58,53 +58,61 @@ async function crudSimulation(req) {
               .collection("SIMULATION")
               .find({ ...baseFilter, symbol: symbol })
               .toArray();
-
-            /* } else if (simulationId) {
+          } else if (simulationId) {
             const queryStartDateParam = req?.req?.query?.startDate;
             const queryEndDateParam = req?.req?.query?.endDate;
- const pipeline = [
-        {
-          $match: {
-            ...baseFilter,
-            idSimulation: simulationId
-          }
-        },
-        {
-          $project: {
-            idSimulation: 1,
-            idUser: 1,
-            idStrategy: 1,
-            simulationName: 1,
-            symbol: 1,
-            startDate: 1,
-            endDate: 1,
-            amount: 1,
-            specs: 1,
-            result: 1,
-            percentageReturn: 1,
-            summary: 1,
-            DETAIL_ROW: 1,
-            signals: {
-              $filter: {
-                input: "$signals",
-                as: "signal",
-                cond: {
-                  $and: [
-                    { $gte: [{ $toDate: "$$signal.date" }, queryStartDateParam] },
-                    { $lte: [{ $toDate: "$$signal.date" }, queryEndDateParam] }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      ];
+            const pipeline = [
+              {
+                $match: {
+                  ...baseFilter,
+                  idSimulation: simulationId,
+                },
+              },
+              {
+                $project: {
+                  idSimulation: 1,
+                  idUser: 1,
+                  idStrategy: 1,
+                  simulationName: 1,
+                  symbol: 1,
+                  startDate: 1,
+                  endDate: 1,
+                  amount: 1,
+                  specs: 1,
+                  result: 1,
+                  percentageReturn: 1,
+                  summary: 1,
+                  DETAIL_ROW: 1,
+                  signals: {
+                    $filter: {
+                      input: "$signals",
+                      as: "signal",
+                      cond: {
+                        $and: [
+                          {
+                            $gte: [
+                              { $toDate: "$$signal.date" },
+                              queryStartDateParam,
+                            ],
+                          },
+                          {
+                            $lte: [
+                              { $toDate: "$$signal.date" },
+                              queryEndDateParam,
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            ];
 
-      result = await mongoose.connection
-        .collection("SIMULATION")
-        .aggregate(pipeline)
-        .toArray();
-*/
+            result = await mongoose.connection
+              .collection("SIMULATION")
+              .aggregate(pipeline)
+              .toArray();
           } else {
             result = await mongoose.connection
               .collection("SIMULATION")
@@ -932,8 +940,8 @@ async function reversionSimple(req) {
     };
 
     const SIMULATIONID = generateSimulationId(SYMBOL);
-    const SIMULATIONNAME = "Estrategia de Reversión Simple"; // Nombre de la estrategia
-    const STRATEGYID = "STRATEGY_001"; // Ajustado a "IdCM" según el formato deseado
+    const SIMULATIONNAME = "Reversión Simple"; // Nombre de la estrategia
+    const STRATEGYID = "Reversión Simple"; // Ajustado a "IdCM" según el formato deseado
 
     // Extracción de los períodos para RSI y SMA de las especificaciones, con valores por defecto.
     // CORRECCIÓN: Usar 'INDICATOR' en lugar de 'KEY' para encontrar los indicadores.
@@ -1096,7 +1104,9 @@ async function reversionSimple(req) {
         const SPENT = UNITS_TRANSACTED * PRICE;
         UNITS_HELD = parseFloat((UNITS_HELD + UNITS_TRANSACTED).toFixed(10)); // Mantener precisión
         CASH -= SPENT;
-        TOTAL_BOUGHT_UNITS = parseFloat((TOTAL_BOUGHT_UNITS + UNITS_TRANSACTED).toFixed(10)); // Mantener precisión
+        TOTAL_BOUGHT_UNITS = parseFloat(
+          (TOTAL_BOUGHT_UNITS + UNITS_TRANSACTED).toFixed(10)
+        ); // Mantener precisión
         // Registra la compra para el cálculo FIFO.
         BOUGHT_PRICES.push({ DATE, PRICE, UNITS: UNITS_TRANSACTED });
 
@@ -1112,7 +1122,9 @@ async function reversionSimple(req) {
         const REVENUE = UNITS_TO_SELL * PRICE;
         CASH += REVENUE;
         UNITS_HELD = parseFloat((UNITS_HELD - UNITS_TO_SELL).toFixed(10)); // Mantener precisión
-        TOTAL_SOLD_UNITS = parseFloat((TOTAL_SOLD_UNITS + UNITS_TO_SELL).toFixed(10)); // Mantener precisión
+        TOTAL_SOLD_UNITS = parseFloat(
+          (TOTAL_SOLD_UNITS + UNITS_TO_SELL).toFixed(10)
+        ); // Mantener precisión
         UNITS_TRANSACTED = UNITS_TO_SELL;
 
         // Lógica FIFO para calcular la ganancia/pérdida real de las unidades vendidas.
@@ -1129,9 +1141,13 @@ async function reversionSimple(req) {
             SOLD_UNITS_COUNTER
           );
           COST_OF_SOLD_UNITS += UNITS_FROM_THIS_PURCHASE * PURCHASE.PRICE;
-          SOLD_UNITS_COUNTER = parseFloat((SOLD_UNITS_COUNTER - UNITS_FROM_THIS_PURCHASE).toFixed(10)); // Mantener precisión
+          SOLD_UNITS_COUNTER = parseFloat(
+            (SOLD_UNITS_COUNTER - UNITS_FROM_THIS_PURCHASE).toFixed(10)
+          ); // Mantener precisión
 
-          BOUGHT_PRICES[J].UNITS = parseFloat((BOUGHT_PRICES[J].UNITS - UNITS_FROM_THIS_PURCHASE).toFixed(10)); // Mantener precisión
+          BOUGHT_PRICES[J].UNITS = parseFloat(
+            (BOUGHT_PRICES[J].UNITS - UNITS_FROM_THIS_PURCHASE).toFixed(10)
+          ); // Mantener precisión
           if (BOUGHT_PRICES[J].UNITS <= 0) {
             UNITS_REMOVED_FROM_BOUGHT.push(J); // Marca las compras agotadas para eliminación.
           }
@@ -1261,7 +1277,6 @@ async function reversionSimple(req) {
     throw ERROR;
   }
 }
-
 
 async function simulateSupertrend(req) {
   console.log(req);
@@ -1527,7 +1542,7 @@ async function simulateSupertrend(req) {
     const simulation = {
       SIMULATIONID,
       USERID,
-      STRATEGYID,
+      STRATEGYID: "Supertrend",
       SIMULATIONNAME,
       SYMBOL,
       INDICATORS: { value: SPECS },
@@ -2448,7 +2463,7 @@ async function SimulateMACrossover(body) {
         .replace(/[:.]/g, "-")
         .replace("T", "_")}`,
       USERID,
-      STRATEGY: "IdCM",
+      STRATEGYID: "MACrossover",
       SIMULATIONNAME: `MA Crossover ${shortMa}/${longMa}`,
       SYMBOL,
       STARTDATE: new Date(STARTDATE).toISOString().slice(0, 10),
