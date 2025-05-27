@@ -1062,10 +1062,10 @@ async function reversionSimple(req) {
 
     // Variables para la simulación de la estrategia.
     const SIGNALS = [];
-    let UNITS_HELD = 0; // Unidades del activo en posesión
+    let UNITS_HELD = 0; // Unidades del activo en posesión (ahora entero)
     let CASH = parseFloat(AMOUNT); // Capital disponible
-    let TOTAL_BOUGHT_UNITS = 0; // Total de unidades compradas a lo largo de la simulación
-    let TOTAL_SOLD_UNITS = 0; // Total de unidades vendidas a lo largo de la simulación
+    let TOTAL_BOUGHT_UNITS = 0; // Total de unidades compradas a lo largo de la simulación (ahora entero)
+    let TOTAL_SOLD_UNITS = 0; // Total de unidades vendidas a lo largo de la simulación (ahora entero)
     const BOUGHT_PRICES = []; // Registro de compras para cálculo FIFO
     let REAL_PROFIT = 0; // Ganancia/pérdida realizada
     const NEW_CHART_DATA = []; // Datos para la visualización en un gráfico (modificado)
@@ -1093,81 +1093,83 @@ async function reversionSimple(req) {
 
       let CURRENT_SIGNAL_TYPE = null;
       let CURRENT_REASONING = null;
-      let UNITS_TRANSACTED = 0;
+      let UNITS_TRANSACTED = 0; // Unidades transaccionadas en este paso (ahora entero)
       let PROFIT_LOSS = 0;
 
       // Lógica de la estrategia: Señal de COMPRA
       // Compra si el precio está significativamente por debajo del SMA y hay efectivo disponible.
       if (PRICE < SMA * 0.98 && CASH > 0) {
         const INVESTMENT_AMOUNT = CASH * 0.5; // Invierte el 50% del efectivo disponible
-        UNITS_TRANSACTED = parseFloat((INVESTMENT_AMOUNT / PRICE).toFixed(10)); // Precisión para unidades
-        const SPENT = UNITS_TRANSACTED * PRICE;
-        UNITS_HELD = parseFloat((UNITS_HELD + UNITS_TRANSACTED).toFixed(10)); // Mantener precisión
-        CASH -= SPENT;
-        TOTAL_BOUGHT_UNITS = parseFloat(
-          (TOTAL_BOUGHT_UNITS + UNITS_TRANSACTED).toFixed(10)
-        ); // Mantener precisión
-        // Registra la compra para el cálculo FIFO.
-        BOUGHT_PRICES.push({ DATE, PRICE, UNITS: UNITS_TRANSACTED });
+        // Asegura que las unidades compradas sean un número entero.
+        UNITS_TRANSACTED = Math.floor(INVESTMENT_AMOUNT / PRICE);
 
-        CURRENT_SIGNAL_TYPE = "buy"; // Cambiado a minúsculas
-        CURRENT_REASONING = `EL PRECIO ESTÁ POR DEBAJO DEL 98% DEL SMA. RSI: ${RSI.toFixed(
-          2
-        )}`;
+        // Solo procede si se pueden comprar al menos una unidad
+        if (UNITS_TRANSACTED > 0) {
+          const SPENT = UNITS_TRANSACTED * PRICE;
+          UNITS_HELD += UNITS_TRANSACTED;
+          CASH -= SPENT;
+          TOTAL_BOUGHT_UNITS += UNITS_TRANSACTED;
+          // Registra la compra para el cálculo FIFO.
+          BOUGHT_PRICES.push({ DATE, PRICE, UNITS: UNITS_TRANSACTED });
+
+          CURRENT_SIGNAL_TYPE = "buy"; // Cambiado a minúsculas
+          CURRENT_REASONING = `EL PRECIO ESTÁ POR DEBAJO DEL 98% DEL SMA. RSI: ${RSI.toFixed(
+            2
+          )}`;
+        }
       }
       // Lógica de la estrategia: Señal de VENTA
       // Vende si el precio está significativamente por encima del SMA y hay unidades en posesión.
       else if (PRICE > SMA * 1.02 && UNITS_HELD > 0) {
-        const UNITS_TO_SELL = parseFloat((UNITS_HELD * 0.25).toFixed(10)); // Precisión para unidades a vender
-        const REVENUE = UNITS_TO_SELL * PRICE;
-        CASH += REVENUE;
-        UNITS_HELD = parseFloat((UNITS_HELD - UNITS_TO_SELL).toFixed(10)); // Mantener precisión
-        TOTAL_SOLD_UNITS = parseFloat(
-          (TOTAL_SOLD_UNITS + UNITS_TO_SELL).toFixed(10)
-        ); // Mantener precisión
-        UNITS_TRANSACTED = UNITS_TO_SELL;
+        // Asegura que las unidades a vender sean un número entero.
+        const UNITS_TO_SELL = Math.floor(UNITS_HELD * 0.25);
 
-        // Lógica FIFO para calcular la ganancia/pérdida real de las unidades vendidas.
-        let SOLD_UNITS_COUNTER = UNITS_TO_SELL;
-        let COST_OF_SOLD_UNITS = 0;
-        let UNITS_REMOVED_FROM_BOUGHT = []; // Para limpiar el registro de compras
+        // Solo procede si se pueden vender al menos una unidad
+        if (UNITS_TO_SELL > 0) {
+          const REVENUE = UNITS_TO_SELL * PRICE;
+          CASH += REVENUE;
+          UNITS_HELD -= UNITS_TO_SELL;
+          TOTAL_SOLD_UNITS += UNITS_TO_SELL;
+          UNITS_TRANSACTED = UNITS_TO_SELL;
 
-        for (let J = 0; J < BOUGHT_PRICES.length; J++) {
-          if (SOLD_UNITS_COUNTER <= 0) break; // Si ya se vendieron todas las unidades necesarias, salir.
+          // Lógica FIFO para calcular la ganancia/pérdida real de las unidades vendidas.
+          let SOLD_UNITS_COUNTER = UNITS_TO_SELL;
+          let COST_OF_SOLD_UNITS = 0;
+          let UNITS_REMOVED_FROM_BOUGHT = []; // Para limpiar el registro de compras
 
-          const PURCHASE = BOUGHT_PRICES[J];
-          const UNITS_FROM_THIS_PURCHASE = Math.min(
-            PURCHASE.UNITS,
-            SOLD_UNITS_COUNTER
-          );
-          COST_OF_SOLD_UNITS += UNITS_FROM_THIS_PURCHASE * PURCHASE.PRICE;
-          SOLD_UNITS_COUNTER = parseFloat(
-            (SOLD_UNITS_COUNTER - UNITS_FROM_THIS_PURCHASE).toFixed(10)
-          ); // Mantener precisión
+          for (let J = 0; J < BOUGHT_PRICES.length; J++) {
+            if (SOLD_UNITS_COUNTER <= 0) break; // Si ya se vendieron todas las unidades necesarias, salir.
 
-          BOUGHT_PRICES[J].UNITS = parseFloat(
-            (BOUGHT_PRICES[J].UNITS - UNITS_FROM_THIS_PURCHASE).toFixed(10)
-          ); // Mantener precisión
-          if (BOUGHT_PRICES[J].UNITS <= 0) {
-            UNITS_REMOVED_FROM_BOUGHT.push(J); // Marca las compras agotadas para eliminación.
+            const PURCHASE = BOUGHT_PRICES[J];
+            const UNITS_FROM_THIS_PURCHASE = Math.min(
+              PURCHASE.UNITS,
+              SOLD_UNITS_COUNTER
+            );
+            COST_OF_SOLD_UNITS += UNITS_FROM_THIS_PURCHASE * PURCHASE.PRICE;
+            SOLD_UNITS_COUNTER -= UNITS_FROM_THIS_PURCHASE; // Ahora son enteros
+
+            BOUGHT_PRICES[J].UNITS -= UNITS_FROM_THIS_PURCHASE; // Ahora son enteros
+            if (BOUGHT_PRICES[J].UNITS <= 0) {
+              UNITS_REMOVED_FROM_BOUGHT.push(J); // Marca las compras agotadas para eliminación.
+            }
           }
+
+          // Elimina las entradas de compras agotadas del registro (en orden inverso para evitar problemas de índice).
+          for (let K = UNITS_REMOVED_FROM_BOUGHT.length - 1; K >= 0; K--) {
+            BOUGHT_PRICES.splice(UNITS_REMOVED_FROM_BOUGHT[K], 1);
+          }
+
+          const AVG_PURCHASE_PRICE_FOR_SOLD_UNITS =
+            COST_OF_SOLD_UNITS / UNITS_TO_SELL;
+          PROFIT_LOSS =
+            (PRICE - AVG_PURCHASE_PRICE_FOR_SOLD_UNITS) * UNITS_TO_SELL;
+          REAL_PROFIT += PROFIT_LOSS;
+
+          CURRENT_SIGNAL_TYPE = "sell"; // Cambiado a minúsculas
+          CURRENT_REASONING = `EL PRECIO ESTÁ POR ENCIMA DEL 102% DEL SMA. RSI: ${RSI.toFixed(
+            2
+          )}`;
         }
-
-        // Elimina las entradas de compras agotadas del registro (en orden inverso para evitar problemas de índice).
-        for (let K = UNITS_REMOVED_FROM_BOUGHT.length - 1; K >= 0; K--) {
-          BOUGHT_PRICES.splice(UNITS_REMOVED_FROM_BOUGHT[K], 1);
-        }
-
-        const AVG_PURCHASE_PRICE_FOR_SOLD_UNITS =
-          COST_OF_SOLD_UNITS / UNITS_TO_SELL;
-        PROFIT_LOSS =
-          (PRICE - AVG_PURCHASE_PRICE_FOR_SOLD_UNITS) * UNITS_TO_SELL;
-        REAL_PROFIT += PROFIT_LOSS;
-
-        CURRENT_SIGNAL_TYPE = "sell"; // Cambiado a minúsculas
-        CURRENT_REASONING = `EL PRECIO ESTÁ POR ENCIMA DEL 102% DEL SMA. RSI: ${RSI.toFixed(
-          2
-        )}`;
       }
 
       // Si se generó una señal (compra o venta), registrarla.
@@ -1177,7 +1179,7 @@ async function reversionSimple(req) {
           TYPE: CURRENT_SIGNAL_TYPE,
           PRICE: parseFloat(PRICE.toFixed(2)),
           REASONING: CURRENT_REASONING,
-          SHARES: parseFloat(UNITS_TRANSACTED.toFixed(10)), // Alta precisión para las unidades
+          SHARES: UNITS_TRANSACTED, // Las unidades ya son enteras
           PROFIT: parseFloat(PROFIT_LOSS.toFixed(2)),
         });
       }
@@ -1211,9 +1213,9 @@ async function reversionSimple(req) {
 
     // Objeto SUMMARY con los cálculos finales.
     const SUMMARY = {
-      TOTAL_BOUGHT_UNITS: parseFloat(TOTAL_BOUGHT_UNITS.toFixed(5)),
-      TOTAL_SOLD_UNITS: parseFloat(TOTAL_SOLD_UNITS.toFixed(5)),
-      REMAINING_UNITS: parseFloat(UNITS_HELD.toFixed(5)),
+      TOTAL_BOUGHT_UNITS: TOTAL_BOUGHT_UNITS, // Ahora es entero
+      TOTAL_SOLD_UNITS: TOTAL_SOLD_UNITS, // Ahora es entero
+      REMAINING_UNITS: UNITS_HELD, // Ahora es entero
       FINAL_CASH: parseFloat(CASH.toFixed(2)),
       FINAL_VALUE: parseFloat(FINAL_VALUE.toFixed(2)),
       FINAL_BALANCE: parseFloat(FINAL_BALANCE_CALCULATED.toFixed(2)),
