@@ -7,7 +7,6 @@ const {
   crudStrategies,
   company,
   strategy,
-  priceshistory,
   reversionSimple,
   simulateSupertrend,
   SimulateMomentum,
@@ -49,14 +48,6 @@ class InversionsClass extends cds.ApplicationService {
         return await strategy(req);
       } catch (error) {
         req.error(400, error.message || "Error en strategy");
-      }
-    });
-
-    this.on("priceshistory", async (req) => {
-      try {
-        return await priceshistory(req);
-      } catch (error) {
-        req.error(400, error.message || "Error en indicators");
       }
     });
 
