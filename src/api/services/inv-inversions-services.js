@@ -2141,7 +2141,6 @@ module.exports = {
   crudStrategies,
   company,
   strategy,
-  priceshistory,
   reversionSimple,
   simulateSupertrend,
   SimulateMomentum,
