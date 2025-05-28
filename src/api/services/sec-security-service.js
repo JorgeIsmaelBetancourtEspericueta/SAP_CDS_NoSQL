@@ -397,22 +397,22 @@ async function CrudUsers(req) {
                 },
               ])
               .toArray();
-              //Verificar contraseña es correcta
-              /*
-              const passwordIngresada = '1234e';
-              console.log(`Password ingresada: ${passwordIngresada}`);
-              if (passwordIngresada && result.length > 0) {
-                const bcrypt = require("bcrypt");
-                const hashAlmacenado = result[0].PASSWORD;
-                const isMatch = await bcrypt.compare(passwordIngresada, hashAlmacenado);
-                console.log(`¿Password correcta? ${isMatch}`);
-                // Puedes agregar el resultado al objeto de respuesta para pruebas:
-                result[0].passwordCorrecta = isMatch;
-              }*/
-              
-              
+            //Verificar contraseña es correcta
+            /*
+            const passwordIngresada = '1234e';
+            console.log(`Password ingresada: ${passwordIngresada}`);
+            if (passwordIngresada && result.length > 0) {
+              const bcrypt = require("bcrypt");
+              const hashAlmacenado = result[0].PASSWORD;
+              const isMatch = await bcrypt.compare(passwordIngresada, hashAlmacenado);
+              console.log(`¿Password correcta? ${isMatch}`);
+              // Puedes agregar el resultado al objeto de respuesta para pruebas:
+              result[0].passwordCorrecta = isMatch;
+            }*/
+
+
           }
-          
+
           return result;
         } catch (error) {
           throw new Error(error.message);
@@ -495,7 +495,7 @@ async function CrudUsers(req) {
               missingRoles,
             };
           }
-        
+
           // Crear el nuevo objeto de usuario
           const newUser = {
             USERID,
@@ -542,10 +542,9 @@ async function CrudUsers(req) {
         } catch (error) {
           console.error("Error al crear el usuario:", error.message);
           throw error;
-        }
-      case "update":
+        } case "update":
         try {
-          const { userid, roleid } = req?.req?.query;
+          const { userid, deleteRoles } = req?.req?.query;
           const { users } = req?.req?.body;
 
           if (!userid || !users || typeof users !== "object") {
@@ -555,124 +554,134 @@ async function CrudUsers(req) {
             };
           }
 
-          // Verifica si se va a modificar un rol existente
-          if (roleid && users?.ROLES?.[0]?.ROLEID) {
-            const newRoleId = users.ROLES[0].ROLEID;
+          const userData = await mongoose.connection
+            .collection("ZTUSERS")
+            .findOne({ USERID: userid });
 
-            // Verificar si el nuevo rol ya está asignado
-            const userData = await mongoose.connection
-              .collection("ZTUSERS")
-              .findOne({ USERID: userid });
-            if (!userData) {
-              return {
-                error: true,
-                message: `No se encontró el usuario '${userid}'.`,
-              };
-            }
-
-            const alreadyHasNewRole = userData.ROLES?.some(
-              (r) => r.ROLEID === newRoleId
-            );
-            if (alreadyHasNewRole) {
-              return {
-                error: true,
-                message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
-              };
-            }
-
-            const hasOldRole = userData.ROLES?.some((r) => r.ROLEID === roleid);
-            if (!hasOldRole) {
-              return {
-                error: true,
-                message: `El usuario no tiene el ROLEID '${roleid}' asignado.`,
-              };
-            }
-
-            // Verifica si el nuevo ROLEID existe
-            const newRoleData = await mongoose.connection
-              .collection("ZTROLES")
-              .findOne({ ROLEID: newRoleId });
-            if (!newRoleData) {
-              return {
-                error: true,
-                message: `El nuevo ROLEID '${newRoleId}' no existe en ZTROLES.`,
-              };
-            }
-
-            // Actualiza el rol en la posición correspondiente
-            await mongoose.connection.collection("ZTUSERS").updateOne(
-              {
-                USERID: userid,
-                "ROLES.ROLEID": roleid,
-              },
-              {
-                $set: {
-                  "ROLES.$.ROLEID": newRoleId,
-                },
-              }
-            );
+          if (!userData) {
+            return {
+              error: true,
+              message: `No se encontró el usuario '${userid}'.`,
+            };
           }
 
-          // Prepara campos adicionales a actualizar (sin ROLES)
-          const { ROLES, ...otherFields } = users;
+          // 🔁 Eliminar roles si se solicita
+          if (deleteRoles === "true" && Array.isArray(users.ROLES)) {
+            const freshUserData = await mongoose.connection
+              .collection("ZTUSERS")
+              .findOne({ USERID: userid });
 
-          // Actualiza los otros campos si hay alguno
+            if (!freshUserData) {
+              return {
+                error: true,
+                message: `No se encontró el usuario '${userid}' para eliminación de roles.`,
+              };
+            }
+
+            const currentRoles = freshUserData.ROLES || [];
+
+            for (const role of users.ROLES) {
+              const roleIdToDelete = role.ROLEID?.trim();
+              if (!roleIdToDelete) continue;
+
+              const hasRole = currentRoles.some(
+                (r) => r.ROLEID?.trim() === roleIdToDelete
+              );
+
+              if (hasRole) {
+                await mongoose.connection.collection("ZTUSERS").updateOne(
+                  { USERID: userid },
+                  {
+                    $pull: {
+                      ROLES: { ROLEID: roleIdToDelete },
+                    },
+                  }
+                );
+              }
+            }
+          }
+
+          // 🔧 Actualiza otros campos (excluyendo ROLES)
+          const { ROLES, ...otherFields } = users;
           if (Object.keys(otherFields).length > 0) {
             await mongoose.connection
               .collection("ZTUSERS")
               .updateOne({ USERID: userid }, { $set: otherFields });
           }
 
-          // Si se recibe un array ROLES, reemplazarlo completamente
-          if (Array.isArray(users.ROLES)) {
-            await mongoose.connection
-              .collection("ZTUSERS")
-              .updateOne(
-                { USERID: userid },
-                { $set: { ROLES: users.ROLES } }
+          // ➕ Agrega nuevos roles si no se están eliminando
+          if (deleteRoles !== "true" && Array.isArray(users.ROLES)) {
+            for (const role of users.ROLES) {
+              const newRoleId = role.ROLEID;
+              const newRoleIdSAP = role.ROLEIDSAP || "";
+
+              const roleData = await mongoose.connection
+                .collection("ZTROLES")
+                .findOne({ ROLEID: newRoleId });
+
+              if (!roleData) {
+                return {
+                  error: true,
+                  message: `El ROLEID '${newRoleId}' no existe en ZTROLES.`,
+                };
+              }
+
+              const alreadyHasRole = userData.ROLES?.some(
+                (r) => r.ROLEID === newRoleId
               );
-          }
 
-          // Si no se especificó roleid pero sí se quiere agregar uno nuevo
-          if (!roleid && users?.ROLES?.[0]?.ROLEID) {
-            const newRoleId = users.ROLES[0].ROLEID;
-
-            const newRoleData = await mongoose.connection
-              .collection("ZTROLES")
-              .findOne({ ROLEID: newRoleId });
-            if (!newRoleData) {
-              return {
-                error: true,
-                message: `El ROLEID '${newRoleId}' no existe en ZTROLES.`,
-              };
-            }
-
-            const userData = await mongoose.connection
-              .collection("ZTUSERS")
-              .findOne({ USERID: userid });
-            const alreadyHasRole = userData?.ROLES?.some(
-              (r) => r.ROLEID === newRoleId
-            );
-            if (alreadyHasRole) {
-              return {
-                error: true,
-                message: `El usuario ya tiene asignado el ROLEID '${newRoleId}'.`,
-              };
-            }
-
-            // Si se recibe un array ROLES, reemplazarlo completamente
-            if (Array.isArray(users.ROLES)) {
-              await mongoose.connection
-                .collection("ZTUSERS")
-                .updateOne(
+              if (!alreadyHasRole) {
+                await mongoose.connection.collection("ZTUSERS").updateOne(
                   { USERID: userid },
-                  { $set: { ROLES: users.ROLES } }
+                  {
+                    $push: {
+                      ROLES: {
+                        ROLEID: newRoleId,
+                        ROLEIDSAP: newRoleIdSAP,
+                      },
+                    },
+                  }
                 );
+              }
             }
           }
+
+          // 🕒 Actualiza historial DETAIL_ROW
+          const now = new Date();
+          await mongoose.connection.collection("ZTUSERS").updateOne(
+            { USERID: userid },
+            {
+              $set: {
+                "DETAIL_ROW.DETAIL_ROW_REG.$[elem].CURRENT": false,
+              },
+            },
+            {
+              arrayFilters: [{ "elem.CURRENT": true }],
+            }
+          );
+
+          await mongoose.connection.collection("ZTUSERS").updateOne(
+            { USERID: userid },
+            {
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": {
+                  CURRENT: true,
+                  REGDATE: now,
+                  REGTIME: now,
+                  REGUSER: "SYSTEM",
+                },
+              },
+            }
+          );
+
+          // ✅ Obtener datos actualizados
+          const updatedUser = await mongoose.connection
+            .collection("ZTUSERS")
+            .findOne({ USERID: userid });
 
           return {
             message: `El usuario '${userid}' fue actualizado correctamente.`,
+            userData: updatedUser,
           };
         } catch (error) {
           throw new Error(error.message);
@@ -709,7 +718,7 @@ async function DeleteRecord(req) {
     // Función genérica para simular eliminación (actualización de flags)
     const deleteFromCollection = async (collection, fieldName, value) => {
       const filter = { [fieldName]: value };
- 
+
       const existingDoc = await mongoose.connection
         .collection(collection)
         .findOne(filter);
@@ -724,12 +733,12 @@ async function DeleteRecord(req) {
       const activeStatus = existingDoc.DETAIL_ROW?.ACTIVED;
 
 
-     // Construimos el registro de auditoría
+      // Construimos el registro de auditoría
       const regEntry = {
         CURRENT: true,
         REGDATE: new Date(),
         REGTIME: new Date(),
-        REGUSER: "USER_TEST",        
+        REGUSER: "USER_TEST",
       };
 
       if (borrado === "fisic") {
@@ -744,50 +753,50 @@ async function DeleteRecord(req) {
         }
         return { message: `Registro eliminado físicamente de ${collection}` };
       } else if (borrado === "activar") {
-      // Reactivar el registro
-      const result = await mongoose.connection
-        .collection(collection)
-        .updateOne(
-          filter,
-          {
-            $set: {
-              "DETAIL_ROW.ACTIVED": true,
-              "DETAIL_ROW.DELETED": false
-            },
-            $push: {
-              "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+        // Reactivar el registro
+        const result = await mongoose.connection
+          .collection(collection)
+          .updateOne(
+            filter,
+            {
+              $set: {
+                "DETAIL_ROW.ACTIVED": true,
+                "DETAIL_ROW.DELETED": false
+              },
+              $push: {
+                "DETAIL_ROW.DETAIL_ROW_REG": regEntry
+              }
             }
-          }
-        );
-      if (result.modifiedCount === 0) {
-        throw new Error(
-          `No se pudo activar el registro en la colección ${collection}`
-        );
-      }
-      return {
-        message: `Registro activado correctamente en ${collection}`
-      };
-    } else {
-              // Verificación de estado previo para evitar eliminar nuevamente
-      if (
-        deletedStatus === true &&
-        activeStatus === false
-      ) {
-        throw new Error(
-          `El registro en la colección ${collection} ya fue eliminado lógicamente anteriormente`
-        );
-      }
+          );
+        if (result.modifiedCount === 0) {
+          throw new Error(
+            `No se pudo activar el registro en la colección ${collection}`
+          );
+        }
+        return {
+          message: `Registro activado correctamente en ${collection}`
+        };
+      } else {
+        // Verificación de estado previo para evitar eliminar nuevamente
+        if (
+          deletedStatus === true &&
+          activeStatus === false
+        ) {
+          throw new Error(
+            `El registro en la colección ${collection} ya fue eliminado lógicamente anteriormente`
+          );
+        }
 
         await mongoose.connection
-        .collection(collection)
-        .updateOne(
-          filter,
-          {
-            $set: {
-              "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false
+          .collection(collection)
+          .updateOne(
+            filter,
+            {
+              $set: {
+                "DETAIL_ROW.DETAIL_ROW_REG.$[].CURRENT": false
+              }
             }
-          }
-        );
+          );
         const result = await mongoose.connection
           .collection(collection)
           .updateOne(
@@ -934,135 +943,135 @@ async function CrudValues(req) {
             DELETED = false,
             reguser,
           } = req?.req?.body?.values;
-  //    case "create":
-  // try {
-    const valuesArray = req?.req?.body?.values;
-    const currentDate = new Date();
+          //    case "create":
+          // try {
+          const valuesArray = req?.req?.body?.values;
+          const currentDate = new Date();
 
-    if (!Array.isArray(valuesArray) || valuesArray.length === 0) {
-      throw new Error("Se debe proporcionar un arreglo de valores en 'values'.");
-    }
+          if (!Array.isArray(valuesArray) || valuesArray.length === 0) {
+            throw new Error("Se debe proporcionar un arreglo de valores en 'values'.");
+          }
 
-    const validLabels = [
-      "IdApplications",
-      "IdViews",
-      "IdProcesses",
-      "IdRoles",
-      "IdPrivileges",
-    ];
+          const validLabels = [
+            "IdApplications",
+            "IdViews",
+            "IdProcesses",
+            "IdRoles",
+            "IdPrivileges",
+          ];
 
-    const newZTValues = [];
+          const newZTValues = [];
 
-    for (const valueObj of valuesArray) {
-      const {
-        COMPANYID,
-        CEDIID,
-        LABELID,
-        VALUEPAID,
-        VALUEID,
-        VALUE,
-        ALIAS,
-        SEQUENCE,
-        IMAGE,
-        VALUESAPID,
-        DESCRIPTION,
-        ROUTE,
-        ACTIVED = true,
-        DELETED = false,
-        reguser,
-      } = valueObj;
+          for (const valueObj of valuesArray) {
+            const {
+              COMPANYID,
+              CEDIID,
+              LABELID,
+              VALUEPAID,
+              VALUEID,
+              VALUE,
+              ALIAS,
+              SEQUENCE,
+              IMAGE,
+              VALUESAPID,
+              DESCRIPTION,
+              ROUTE,
+              ACTIVED = true,
+              DELETED = false,
+              reguser,
+            } = valueObj;
 
-      if (!validLabels.includes(LABELID)) {
-        throw new Error(
-          `LABELID "${LABELID}" debe ser uno de los siguientes: ${validLabels.join(", ")}`
-        );
-      }
+            if (!validLabels.includes(LABELID)) {
+              throw new Error(
+                `LABELID "${LABELID}" debe ser uno de los siguientes: ${validLabels.join(", ")}`
+              );
+            }
 
-      const valueExists = await mongoose.connection
-        .collection("ZTVALUES")
-        .findOne({ VALUEID });
+            const valueExists = await mongoose.connection
+              .collection("ZTVALUES")
+              .findOne({ VALUEID });
 
-      if (valueExists) {
-        throw new Error(`Ya existe un registro con VALUEID "${VALUEID}".`);
-      }
+            if (valueExists) {
+              throw new Error(`Ya existe un registro con VALUEID "${VALUEID}".`);
+            }
 
-      if (LABELID === "IdApplications" && VALUEPAID) {
-        throw new Error(
-          "VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre."
-        );
-      }
+            if (LABELID === "IdApplications" && VALUEPAID) {
+              throw new Error(
+                "VALUEPAID debe estar vacío cuando LABELID es IdApplications, ya que no tiene padre."
+              );
+            }
 
-      if (LABELID !== "IdApplications") {
-        const labelIndex = validLabels.indexOf(LABELID);
-        const parentLabel = validLabels[labelIndex - 1];
+            if (LABELID !== "IdApplications") {
+              const labelIndex = validLabels.indexOf(LABELID);
+              const parentLabel = validLabels[labelIndex - 1];
 
-        const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
-        if (!regex.test(VALUEPAID)) {
-          throw new Error(
-            `VALUEPAID debe seguir el formato "${parentLabel}-<IdRegistro>" sin espacios.`
-          );
+              const regex = new RegExp(`^${parentLabel}-[A-Za-z0-9]+$`);
+              if (!regex.test(VALUEPAID)) {
+                throw new Error(
+                  `VALUEPAID debe seguir el formato "${parentLabel}-<IdRegistro>" sin espacios.`
+                );
+              }
+
+              const parentId = VALUEPAID.split("-")[1];
+              const parentExists = await mongoose.connection
+                .collection("ZTVALUES")
+                .findOne({ LABELID: parentLabel, VALUEID: parentId });
+
+              if (!parentExists) {
+                throw new Error(
+                  `El ID padre especificado (${parentId}) no existe como ${parentLabel}.`
+                );
+              }
+            }
+
+            const detailRowReg = [
+              {
+                CURRENT: false,
+                REGDATE: currentDate,
+                REGTIME: currentDate,
+                REGUSER: reguser,
+              },
+              {
+                CURRENT: true,
+                REGDATE: currentDate,
+                REGTIME: currentDate,
+                REGUSER: reguser,
+              },
+            ];
+
+            newZTValues.push({
+              COMPANYID,
+              CEDIID,
+              LABELID,
+              VALUEPAID: VALUEPAID || "",
+              VALUEID,
+              VALUE,
+              ALIAS: ALIAS || "",
+              SEQUENCE: SEQUENCE || 0,
+              IMAGE: IMAGE || "",
+              VALUESAPID: VALUESAPID || "",
+              DESCRIPTION: DESCRIPTION || "",
+              ROUTE: ROUTE || "",
+              DETAIL_ROW: {
+                ACTIVED,
+                DELETED,
+                DETAIL_ROW_REG: detailRowReg,
+              },
+            });
+          }
+
+          const result = await mongoose.connection
+            .collection("ZTVALUES")
+            .insertMany(newZTValues);
+
+          return {
+            message: "ZTValues creados exitosamente",
+            insertedCount: result.insertedCount,
+            insertedIds: result.insertedIds,
+          };
+        } catch (error) {
+          throw new Error(error.message);
         }
-
-        const parentId = VALUEPAID.split("-")[1];
-        const parentExists = await mongoose.connection
-          .collection("ZTVALUES")
-          .findOne({ LABELID: parentLabel, VALUEID: parentId });
-
-        if (!parentExists) {
-          throw new Error(
-            `El ID padre especificado (${parentId}) no existe como ${parentLabel}.`
-          );
-        }
-      }
-
-      const detailRowReg = [
-        {
-          CURRENT: false,
-          REGDATE: currentDate,
-          REGTIME: currentDate,
-          REGUSER: reguser,
-        },
-        {
-          CURRENT: true,
-          REGDATE: currentDate,
-          REGTIME: currentDate,
-          REGUSER: reguser,
-        },
-      ];
-
-      newZTValues.push({
-        COMPANYID,
-        CEDIID,
-        LABELID,
-        VALUEPAID: VALUEPAID || "",
-        VALUEID,
-        VALUE,
-        ALIAS: ALIAS || "",
-        SEQUENCE: SEQUENCE || 0,
-        IMAGE: IMAGE || "",
-        VALUESAPID: VALUESAPID || "",
-        DESCRIPTION: DESCRIPTION || "",
-        ROUTE: ROUTE || "",
-        DETAIL_ROW: {
-          ACTIVED,
-          DELETED,
-          DETAIL_ROW_REG: detailRowReg,
-        },
-      });
-    }
-
-    const result = await mongoose.connection
-      .collection("ZTVALUES")
-      .insertMany(newZTValues);
-
-    return {
-      message: "ZTValues creados exitosamente",
-      insertedCount: result.insertedCount,
-      insertedIds: result.insertedIds,
-    };
-  } catch (error) {
-    throw new Error(error.message);
-  }
 
 
       case "update":
