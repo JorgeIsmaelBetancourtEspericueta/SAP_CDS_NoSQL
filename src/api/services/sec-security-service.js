@@ -1762,7 +1762,7 @@ async function CrudLabels(req) {
         );
     }
   } catch (error) {
-    console.error("Error en CrudLabels:", error.message);
+    console.error("Error en el CrudLabels:", error.message);
     throw new Error(error.message);
   }
 }
