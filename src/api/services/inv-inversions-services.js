@@ -139,7 +139,7 @@ async function crudSimulation(req) {
             );
           }
 
-          const filter = { idSimulation: id };
+          const filter = { SIMULATIONID: id };
           const collection = mongoose.connection.collection("SIMULATION");
 
           // Comprobar existencia
@@ -414,7 +414,9 @@ async function crudStrategies(req) {
           }
 
           const collection = mongoose.connection.collection("STRATEGIES");
-          const filter = { ID: id };
+          const filter = {
+            SIMULATIONID: id,
+          };
 
           // 2) Buscar documento
           let existing = await collection.findOne(filter);
