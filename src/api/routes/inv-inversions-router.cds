@@ -25,7 +25,7 @@ service PricesHistoryRouter @(path: '/api/inv') {
     //Crud para simulaciones
     @Core.Description: 'crud-simulation'
     @path            : 'crudSimulation'
-    action   crudSimulation(simulation : entsimulation) returns array of entsimulation;
+    action   crudSimulation(SIMULATION : entsimulation) returns array of entsimulation;
 
     //Crud para strategies
     @Core.Description: 'crud-strategies'

@@ -563,7 +563,7 @@ async function crudSimulation(req) {
       case "update":
         try {
           const { id } = req?.req?.query || {};
-          const simulation = req?.data?.simulation;
+          const simulation = req?.req?.body?.SIMULATION;
           const idUser = "USER_TEST";
           if (!id) {
             throw new Error(
@@ -571,14 +571,16 @@ async function crudSimulation(req) {
             );
           }
 
-          if (!simulation?.simulationName) {
+          if (!simulation?.SIMULATIONNAME) {
             throw new Error(
               "Se debe proporcionar un nuevo nombre para la simulación en 'simulation.simulationName'."
             );
           }
 
           const collection = mongoose.connection.collection("SIMULATION");
-          const existing = await collection.findOne({ idSimulation: id });
+          const existing = await collection.findOne({
+            SIMULATIONID: id,
+          });
           if (!existing) {
             return {
               "@odata.context": "$metadata#entsimulation",
@@ -594,7 +596,7 @@ async function crudSimulation(req) {
           };
 
           await collection.updateOne(
-            { idSimulation: id },
+            { SIMULATIONID: id },
             {
               $set: {
                 "DETAIL_ROW.0.DETAIL_ROW_REG.$[].CURRENT": false,
@@ -604,10 +606,10 @@ async function crudSimulation(req) {
 
           // 2. Setear nuevo nombre y agregar nueva entrada de auditoría
           const updRes = await collection.updateOne(
-            { idSimulation: id },
+            { SIMULATIONID: id },
             {
               $set: {
-                simulationName: simulation.simulationName,
+                SIMULATIONNAME: simulation.SIMULATIONNAME,
               },
               $push: {
                 "DETAIL_ROW.0.DETAIL_ROW_REG": regEntry,
@@ -619,7 +621,7 @@ async function crudSimulation(req) {
             throw new Error("No se pudo actualizar la simulación");
           }
 
-          const updatedDoc = await collection.findOne({ idSimulation: id });
+          const updatedDoc = await collection.findOne({ SIMULATIONID: id });
           return {
             "@odata.context": "$metadata#entsimulation",
             message: "Nombre de simulación actualizado exitosamente.",
